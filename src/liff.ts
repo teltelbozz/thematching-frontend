@@ -1,34 +1,45 @@
 import liff from '@line/liff';
 
+/** LIFF 初期化 */
 export async function initLiff() {
-  const liffId = import.meta.env.VITE_LIFF_ID;
-  if (!liffId) throw new Error('VITE_LIFF_ID is missing');
-  await liff.init({ liffId });
+  const id = import.meta.env.VITE_LIFF_ID;
+  if (!id) throw new Error('VITE_LIFF_ID is missing');
+  await liff.init({ liffId: id });
 }
 
+/** ログイン状態 */
 export function isLoggedIn() {
   return liff.isLoggedIn();
 }
 
+/** ログイン（scopeはLINE Devの設定を使用）*/
 export async function login() {
   if (!liff.isLoggedIn()) {
-    //await liff.login({ scope: ['openid', 'profile'] }); // openid が必須
-    await liff.login(); // scopeはLINE Developersで設定済みなら不要
+    await liff.login(); // scopeはLIFF設定(openid, profile)に依存
   }
 }
 
+/** ログアウト */
 export function logout() {
   if (liff.isLoggedIn()) {
     liff.logout();
-    window.location.reload();
+    location.reload();
   }
 }
 
-export function getIDToken(): string | null {
-  return liff.getIDToken();
+/** IDトークン（常に“新しく”取得） */
+export function getFreshIDToken(): string | null {
+  // liff.getIDToken() は毎回“現在の有効なトークン”を返す
+  const token = liff.getIDToken();
+  return token || null;
 }
 
-export async function getProfile() {
-  if (!liff.isLoggedIn()) return null;
-  return await liff.getProfile();
+/** デバッグ：JWTのexp/iat確認（バリデーション無し） */
+export function decodeJwtPayload(token: string): any | null {
+  try {
+    const payload = token.split('.')[1];
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
 }
