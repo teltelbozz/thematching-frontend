@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { initLiff, ensureFreshIdToken, logout } from './liff';
+import { initLiff, ensureFreshIdToken, forceReLogin, logout } from './liff';
 import { authLoginWithIdToken, authMe } from './api';
 
 export default function App() {
-  const [boot, setBoot] = useState<'booting' | 'ready'>('booting');
   const [me, setMe] = useState<any>(null);
   const [err, setErr] = useState<string>();
 
@@ -11,50 +10,35 @@ export default function App() {
     (async () => {
       try {
         await initLiff();
-        setBoot('ready');
-
-        const idToken = await ensureFreshIdToken(60_000); // 残り1分未満なら更新
-        await authLoginWithIdToken(idToken);              // Cookie発行
+        const token = await ensureFreshIdToken(60_000); // 残り1分未満なら更新
+        await authLoginWithIdToken(token);
         const m = await authMe();
         setMe(m.user);
-      } catch (e: any) {
+      } catch (e:any) {
         setErr(e?.message || String(e));
-        console.error(e);
       }
     })();
   }, []);
 
-  const retry = async () => {
-    setErr(undefined);
+  const handleForce = async () => {
     try {
-      const idToken = await ensureFreshIdToken(60_000);
-      await authLoginWithIdToken(idToken);
+      setErr(undefined);
+      const t = await forceReLogin();      // ★完全取り直し
+      await authLoginWithIdToken(t);
       const m = await authMe();
       setMe(m.user);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-      console.error(e);
-    }
+    } catch (e:any) { setErr(e?.message || String(e)); }
   };
 
   return (
-    <div style={{ padding: 16, fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto' }}>
+    <div style={{padding:16}}>
       <h1>thematching LIFF</h1>
-      <div>status: {boot}</div>
-
-      {err && (
-        <div style={{ color: 'crimson', marginTop: 8 }}>
-          <div><b>Login failed:</b> {err}</div>
-          <button style={{ marginTop: 8 }} onClick={retry}>Re-Login & Retry</button>
-        </div>
-      )}
-
-      {me ? (
-        <div style={{ marginTop: 16 }}>
-          <div>Logged in as: <b>{me.nickname || me.line_user_id}</b></div>
-          <button style={{ marginTop: 12 }} onClick={logout}>Logout</button>
-        </div>
-      ) : null}
+      {err && <div style={{color:'crimson'}}>Login failed: {err}
+        <div><button onClick={handleForce}>Force Re-Login</button></div>
+      </div>}
+      {me && <div>Logged in as: <b>{me.nickname || me.line_user_id}</b>
+        <div><button onClick={logout}>Logout</button></div>
+      </div>}
     </div>
   );
 }

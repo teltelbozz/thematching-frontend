@@ -11,47 +11,46 @@ export function isLoggedIn() {
 }
 
 export async function login() {
-  // LIFFのlogin()は、すでにログイン済みでも呼ぶとトークンをリフレッシュできます
-  await liff.login(); // scopeはLIFF設定(openid, profile)で付与
+  await liff.login(); // scopeはLIFF設定(openid, profile)
 }
 
 export function logout() {
-  if (liff.isLoggedIn()) {
-    liff.logout();
-    location.reload();
-  }
+  if (liff.isLoggedIn()) { liff.logout(); location.reload(); }
 }
 
 export function getIDToken(): string | null {
   return liff.getIDToken() || null;
 }
-
 export function decodeJwtPayload(token: string): any | null {
   try {
     const payload = token.split('.')[1];
     return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/** 有効期限をチェックし、切れている/近い場合は再ログインして新しいid_tokenを取る */
+/** 残りminMsLeft未満なら再ログインしてid_tokenを更新 */
 export async function ensureFreshIdToken(minMsLeft = 60_000): Promise<string> {
-  if (!isLoggedIn()) {
-    await login(); // リダイレクト→戻ってくる
-  }
+  if (!isLoggedIn()) await login();
   let token = getIDToken();
-  let expLeft = 0;
-
+  let left = 0;
   if (token) {
     const p = decodeJwtPayload(token);
-    if (p?.exp) expLeft = p.exp * 1000 - Date.now();
+    if (p?.exp) left = p.exp * 1000 - Date.now();
   }
-  // 期限切れ or 残りわずか → 再ログインでリフレッシュ
-  if (!token || expLeft < minMsLeft) {
-    await login(); // 再ログインでid_token更新
+  if (!token || left < minMsLeft) {
+    await login();                     // ★ここで新しい id_token に更新させる
     token = getIDToken();
     if (!token) throw new Error('Failed to get fresh ID token');
   }
   return token;
+}
+
+/** 完全にセッションを捨てて取り直す（ボタン用） */
+export async function forceReLogin(): Promise<string> {
+  if (liff.isLoggedIn()) liff.logout();
+  const url = location.origin + location.pathname + '?t=' + Date.now();
+  await liff.login({ redirectUri: url });
+  const t = liff.getIDToken();
+  if (!t) throw new Error('No ID token after force login');
+  return t;
 }
