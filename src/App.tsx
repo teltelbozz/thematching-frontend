@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { initLiff, login, logout, isLoggedIn, getIDToken, getProfile } from './liff';
+import { useEffect, useState } from 'react';
+import { initLiff, login, logout, isLoggedIn, getIDToken } from './liff';
 import { authLoginWithIdToken, authMe } from './api';
 
 function App() {

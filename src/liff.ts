@@ -12,7 +12,8 @@ export function isLoggedIn() {
 
 export async function login() {
   if (!liff.isLoggedIn()) {
-    await liff.login({ scope: ['openid', 'profile'] }); // openid が必須
+    //await liff.login({ scope: ['openid', 'profile'] }); // openid が必須
+    await liff.login(); // scopeはLINE Developersで設定済みなら不要
   }
 }
 
