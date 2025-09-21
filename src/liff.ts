@@ -1,25 +1,20 @@
 import liff from '@line/liff';
 
-/** LIFF 初期化 */
 export async function initLiff() {
   const id = import.meta.env.VITE_LIFF_ID;
   if (!id) throw new Error('VITE_LIFF_ID is missing');
   await liff.init({ liffId: id });
 }
 
-/** ログイン状態 */
 export function isLoggedIn() {
   return liff.isLoggedIn();
 }
 
-/** ログイン（scopeはLINE Devの設定を使用）*/
 export async function login() {
-  if (!liff.isLoggedIn()) {
-    await liff.login(); // scopeはLIFF設定(openid, profile)に依存
-  }
+  // LIFFのlogin()は、すでにログイン済みでも呼ぶとトークンをリフレッシュできます
+  await liff.login(); // scopeはLIFF設定(openid, profile)で付与
 }
 
-/** ログアウト */
 export function logout() {
   if (liff.isLoggedIn()) {
     liff.logout();
@@ -27,14 +22,10 @@ export function logout() {
   }
 }
 
-/** IDトークン（常に“新しく”取得） */
-export function getFreshIDToken(): string | null {
-  // liff.getIDToken() は毎回“現在の有効なトークン”を返す
-  const token = liff.getIDToken();
-  return token || null;
+export function getIDToken(): string | null {
+  return liff.getIDToken() || null;
 }
 
-/** デバッグ：JWTのexp/iat確認（バリデーション無し） */
 export function decodeJwtPayload(token: string): any | null {
   try {
     const payload = token.split('.')[1];
@@ -42,4 +33,25 @@ export function decodeJwtPayload(token: string): any | null {
   } catch {
     return null;
   }
+}
+
+/** 有効期限をチェックし、切れている/近い場合は再ログインして新しいid_tokenを取る */
+export async function ensureFreshIdToken(minMsLeft = 60_000): Promise<string> {
+  if (!isLoggedIn()) {
+    await login(); // リダイレクト→戻ってくる
+  }
+  let token = getIDToken();
+  let expLeft = 0;
+
+  if (token) {
+    const p = decodeJwtPayload(token);
+    if (p?.exp) expLeft = p.exp * 1000 - Date.now();
+  }
+  // 期限切れ or 残りわずか → 再ログインでリフレッシュ
+  if (!token || expLeft < minMsLeft) {
+    await login(); // 再ログインでid_token更新
+    token = getIDToken();
+    if (!token) throw new Error('Failed to get fresh ID token');
+  }
+  return token;
 }
