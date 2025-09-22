@@ -15,6 +15,7 @@ export default function App() {
 
         // サイレントにトークン確保（必要な場合のみ1回だけリダイレクト）
         const idToken = await ensureFreshIdToken(60_000);
+        console.log('[LIFF] id_token =', idToken);
         await authLoginWithIdToken(idToken); // Cookie発行
         const m = await authMe();
         setMe(m.user);
