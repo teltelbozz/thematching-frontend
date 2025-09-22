@@ -15,6 +15,7 @@ export default function App() {
 
         // 1) id_token を確保（必要なら1回だけリダイレクト）
         const idToken = await ensureFreshIdToken(60_000);
+        console.log('[liff] idToken =', idToken);
         // 2) login → access_token(JSON) + refresh Cookie(HttpOnly)
         await authLoginWithIdToken(idToken);
         // 3) Bearer で /me
