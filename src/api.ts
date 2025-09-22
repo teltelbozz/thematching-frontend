@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://thematching.vercel.app/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://thematching-backend.vercel.app/api';
 
 let accessToken: string | null = null;
 
