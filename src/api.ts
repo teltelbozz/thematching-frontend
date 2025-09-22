@@ -9,12 +9,13 @@ export function setAccessToken(token: string | null) {
 async function refreshAccess(): Promise<boolean> {
   const resp = await fetch(`${API_BASE}/auth/refresh`, {
     method: 'POST',
-    credentials: 'include', // ← RefreshはCookieに依存
+    credentials: 'include',
   });
   if (!resp.ok) return false;
   const data = await resp.json();
   if (data?.access_token) {
     setAccessToken(data.access_token);
+    console.log('[api] refreshed access token');
     return true;
   }
   return false;
@@ -22,34 +23,41 @@ async function refreshAccess(): Promise<boolean> {
 
 export async function apiFetch(path: string, init: RequestInit = {}, retry = true) {
   const headers = new Headers(init.headers || {});
+  // Bearer は必要なときだけ
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  headers.set('Content-Type', headers.get('Content-Type') || 'application/json');
+  // ★ GET には Content-Type を付けない（プリフライト最小化）
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   const resp = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
-    credentials: init.credentials, // 通常は不要。refreshは別関数が行う
+    // 通常のAPI呼び出しは credentials 不要（refresh/login は個別に include）
   });
 
   if (resp.status === 401 && retry) {
-    // アクセス失効 → refreshして一度だけリトライ
     const ok = await refreshAccess();
     if (ok) return apiFetch(path, init, false);
   }
   return resp;
 }
 
-// ===== high-level helpers =====
 export async function authLoginWithIdToken(idToken: string) {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include', // ← Set-Cookie(rt) を受け取るため必須
+    credentials: 'include', // refresh-cookie を受け取るため必須
     body: JSON.stringify({ id_token: idToken }),
   });
   if (!resp.ok) throw new Error(`login failed: ${resp.status}`);
   const data = await resp.json();
-  if (data?.access_token) setAccessToken(data.access_token);
+  if (data?.access_token) {
+    setAccessToken(data.access_token);
+    console.log('[api] got access token');
+  } else {
+    console.warn('[api] no access token in login response');
+  }
   return data;
 }
 
