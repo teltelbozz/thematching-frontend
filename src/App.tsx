@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { initLiff, ensureFreshIdToken, forceReLogin, logoutAndReload } from './liff';
-import { authLoginWithIdToken, authMe } from './api';
+import { authLoginWithIdToken, authMe, authLogout } from './api';
 
 export default function App() {
   const [boot, setBoot] = useState<'booting'|'ready'>('booting');
@@ -13,17 +13,11 @@ export default function App() {
         await initLiff();
         setBoot('ready');
 
-        // サイレントにトークン確保（必要な場合のみ1回だけリダイレクト）
+        // 1) id_token を確保（必要なら1回だけリダイレクト）
         const idToken = await ensureFreshIdToken(60_000);
-console.log('[LIFF] id_token =', idToken);
-const payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-console.log('[LIFF] id_token payload:', {
-  aud: payload.aud,
-  iss: payload.iss,
-  sub: payload.sub,
-  exp: payload.exp,
-});
-        await authLoginWithIdToken(idToken); // Cookie発行
+        // 2) login → access_token(JSON) + refresh Cookie(HttpOnly)
+        await authLoginWithIdToken(idToken);
+        // 3) Bearer で /me
         const m = await authMe();
         setMe(m.user);
       } catch (e:any) {
@@ -34,8 +28,8 @@ console.log('[LIFF] id_token payload:', {
   }, []);
 
   const handleForce = async () => {
-    setErr(undefined);
     try {
+      setErr(undefined);
       const t = await forceReLogin();
       await authLoginWithIdToken(t);
       const m = await authMe();
@@ -43,6 +37,11 @@ console.log('[LIFF] id_token payload:', {
     } catch (e:any) {
       setErr(e?.message || String(e));
     }
+  };
+
+  const handleLogout = async () => {
+    await authLogout();
+    logoutAndReload();
   };
 
   return (
@@ -60,9 +59,7 @@ console.log('[LIFF] id_token payload:', {
       {me ? (
         <div style={{ marginTop: 16 }}>
           <div>Logged in as: <b>{me.nickname || me.line_user_id}</b></div>
-          <div style={{ marginTop: 12 }}>
-            <button onClick={logoutAndReload}>Logout</button>
-          </div>
+          <button style={{ marginTop: 12 }} onClick={handleLogout}>Logout</button>
         </div>
       ) : null}
     </div>
