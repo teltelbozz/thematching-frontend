@@ -57,7 +57,7 @@ export async function apiFetch(
  * ログイン：id_token → access_token(JSON) + refresh Cookie(HttpOnly)
  */
 export async function authLoginWithIdToken(idToken: string) {
-  console.log('[api] POST', `${API_BASE}/auth/login`);
+  console.log('[api] POST', `${API_BASE}/auth/login`); //ログを追加
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
