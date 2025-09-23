@@ -1,98 +1,96 @@
 import liff from '@line/liff';
 
-const LOGIN_FLAG_KEY = 'liff-login-tried-at'; // ページ内でのlogin多重実行防止用
-const LOGIN_FLAG_WINDOW_MS = 60_000;          // 1分以内に繰り返し発火しない
-
+/**
+ * LIFF 初期化
+ */
 export async function initLiff() {
   const id = import.meta.env.VITE_LIFF_ID;
   if (!id) throw new Error('VITE_LIFF_ID is missing');
   await liff.init({ liffId: id });
 }
 
+/**
+ * ログイン状態（LIFF視点）
+ */
 export function isLoggedIn() {
   return liff.isLoggedIn();
 }
 
-export function getIDToken(): string | null {
-  return liff.getIDToken() || null;
-}
-
-export function decodeJwtPayload(token: string): any | null {
-  try {
-    const payload = token.split('.')[1];
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-  } catch {
-    return null;
+/**
+ * id_token を取得（exp を見て古ければ再ログイン）
+ * @param maxSkewMs 許容する最大“古さ”（ミリ秒）
+ */
+export async function ensureFreshIdToken(maxSkewMs = 60_000): Promise<string> {
+  if (!liff.isLoggedIn()) {
+    // 初回は LIFF 側のログインから
+    liff.login();
+    // 以降はリダイレクト復帰
+    await new Promise<never>(() => {}); // ここには戻らない
   }
-}
 
-function isTokenValidEnough(token: string | null, minMsLeft = 60_000): boolean {
-  if (!token) return false;
-  const p = decodeJwtPayload(token);
-  if (!p?.exp) return false;
-  const left = p.exp * 1000 - Date.now();
-  return left > minMsLeft; // 残りが閾値より多ければOK
-}
+  const token = liff.getIDToken();
+  const decoded = liff.getDecodedIDToken() as any | null;
+  const nowSec = Math.floor(Date.now() / 1000);
 
-/** このページで最近 login() を実行していないか判定 */
-function loginRecentlyTried(): boolean {
-  const s = sessionStorage.getItem(LOGIN_FLAG_KEY);
-  if (!s) return false;
-  const t = Number(s);
-  return Number.isFinite(t) && Date.now() - t < LOGIN_FLAG_WINDOW_MS;
-}
+  // token が無い／exp が過去／“ほぼ期限切れ”
+  const isStale =
+    !token ||
+    !decoded?.exp ||
+    decoded.exp - nowSec <= Math.ceil(maxSkewMs / 1000);
 
-/** このページで login() を1回だけ実行する */
-async function loginOnce(redirectUri?: string) {
-  if (loginRecentlyTried()) {
-    throw new Error('Login already attempted recently. Avoiding loop.');
+  if (isStale) {
+    // 再ログインで id_token を更新
+    liff.login();
+    await new Promise<never>(() => {});
   }
-  sessionStorage.setItem(LOGIN_FLAG_KEY, String(Date.now()));
-  await liff.login(redirectUri ? { redirectUri } : undefined);
-  // ここで通常はリダイレクトされる。戻ってきたら再度init後に処理を続行
+
+  const fresh = liff.getIDToken();
+  if (!fresh) throw new Error('Failed to acquire LIFF id_token');
+  return fresh;
 }
 
 /**
- * サイレントにトークンを確保する。
- * - 未ログイン: 1回だけ login リダイレクトを実行
- * - ログイン済 & トークン有効: そのまま返す
- * - ログイン済 & トークン失効: 1回だけ login リダイレクトを実行
- * どちらの場合も「直近で login を試している」なら例外を投げてループを止める
+ * 強制再ログイン（ユーザー操作でループを断ち切る用）
  */
-export async function ensureFreshIdToken(minMsLeft = 60_000): Promise<string> {
-  const token = getIDToken();
-  if (isLoggedIn() && isTokenValidEnough(token, minMsLeft)) {
-    return token!; // 充分に有効
-  }
-
-  // ここに来たら「未ログイン」または「トークン期限切れ/間近」
-  // 同じURLに戻す（キャッシュ回避でクエリを付与）
-  const redir = location.origin + location.pathname + location.search + (location.search ? '&' : '?') + 't=' + Date.now();
-  await loginOnce(redir);
-
-  // ここには通常戻ってこないが、戻ってきたときのために再取得
-  const t2 = getIDToken();
-  if (!isTokenValidEnough(t2, minMsLeft)) {
-    throw new Error('Failed to obtain a fresh ID token');
-  }
-  return t2!;
-}
-
-/** 明示的にセッションを捨てて取り直す（ボタン用）*/
 export async function forceReLogin(): Promise<string> {
-  if (liff.isLoggedIn()) liff.logout();
-  sessionStorage.removeItem(LOGIN_FLAG_KEY);
-  const redir = location.origin + location.pathname + '?t=' + Date.now();
-  await loginOnce(redir);
-  const t = getIDToken();
-  if (!isTokenValidEnough(t)) throw new Error('No fresh ID token after force login');
-  return t!;
+  liff.login();
+  await new Promise<never>(() => {});
 }
 
+/**
+ * ログアウト＆再読込
+ */
 export function logoutAndReload() {
-  if (liff.isLoggedIn()) {
+  try {
     liff.logout();
+  } finally {
+    location.replace(location.href.split('#')[0]);
   }
-  sessionStorage.removeItem(LOGIN_FLAG_KEY);
-  location.reload();
+}
+
+/**
+ * 短時間のループ防止（API ベースURL単位でキー分離）
+ */
+const API_BASE = import.meta.env.VITE_API_BASE || '';
+const ATTEMPT_KEY = `login:lastAttempt:${API_BASE}`;
+const COOLDOWN_MS = 8000; // 8秒
+
+export async function maybeLoginOnce<T>(fn: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const last = Number(localStorage.getItem(ATTEMPT_KEY) || '0');
+
+  if (last && now - last < COOLDOWN_MS) {
+    throw new Error('Login already attempted recently. Avoiding loop.');
+  }
+
+  localStorage.setItem(ATTEMPT_KEY, String(now));
+  try {
+    const r = await fn();
+    localStorage.removeItem(ATTEMPT_KEY); // 成功時は解除
+    return r;
+  } catch (e) {
+    // 失敗でも一定時間で解除される（永続ループ防止）
+    setTimeout(() => localStorage.removeItem(ATTEMPT_KEY), COOLDOWN_MS);
+    throw e;
+  }
 }

@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
-import { initLiff, ensureFreshIdToken, forceReLogin, logoutAndReload } from './liff';
-import { authLoginWithIdToken, authMe, authLogout } from './api';
+import {
+  initLiff,
+  ensureFreshIdToken,
+  forceReLogin,
+  logoutAndReload,
+  maybeLoginOnce,
+} from './liff';
+import {
+  authLoginWithIdToken,
+  authMe,
+  authLogout,
+} from './api';
 
 export default function App() {
-  const [boot, setBoot] = useState<'booting'|'ready'>('booting');
+  const [boot, setBoot] = useState<'booting' | 'ready'>('booting');
   const [me, setMe] = useState<any>(null);
   const [err, setErr] = useState<string>();
 
@@ -13,15 +23,14 @@ export default function App() {
         await initLiff();
         setBoot('ready');
 
-        // 1) id_token を確保（必要なら1回だけリダイレクト）
-        const idToken = await ensureFreshIdToken(60_000);
-        console.log('[liff] idToken =', idToken);
-        // 2) login → access_token(JSON) + refresh Cookie(HttpOnly)
-        await authLoginWithIdToken(idToken);
-        // 3) Bearer で /me
-        const m = await authMe();
-        setMe(m.user);
-      } catch (e:any) {
+        await maybeLoginOnce(async () => {
+          const idToken = await ensureFreshIdToken(60_000);
+          console.log('[liff] idToken present?', !!idToken, 'len=', idToken?.length);
+          await authLoginWithIdToken(idToken);
+          const m = await authMe();
+          setMe(m.user);
+        });
+      } catch (e: any) {
         console.error(e);
         setErr(e?.message || String(e));
       }
@@ -31,18 +40,18 @@ export default function App() {
   const handleForce = async () => {
     try {
       setErr(undefined);
-      const t = await forceReLogin();
-      await authLoginWithIdToken(t);
-      const m = await authMe();
-      setMe(m.user);
-    } catch (e:any) {
+      const _ = await forceReLogin(); // リダイレクトで戻るので通常ここに戻らない
+    } catch (e: any) {
       setErr(e?.message || String(e));
     }
   };
 
   const handleLogout = async () => {
-    await authLogout();
-    logoutAndReload();
+    try {
+      await authLogout();
+    } finally {
+      logoutAndReload();
+    }
   };
 
   return (
@@ -53,7 +62,9 @@ export default function App() {
       {err && (
         <div style={{ color: 'crimson', marginTop: 8 }}>
           <div><b>Login failed:</b> {err}</div>
-          <button style={{ marginTop: 8 }} onClick={handleForce}>Force Re-Login</button>
+          <button style={{ marginTop: 8 }} onClick={handleForce}>
+            Force Re-Login
+          </button>
         </div>
       )}
 
