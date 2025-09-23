@@ -33,9 +33,9 @@ export async function ensureFreshIdToken(maxSkewMs = 60_000): Promise<string> {
 }
 
 /** ★ ここを修正：戻り型を Promise<never> に */
-export async function forceReLogin(): Promise<never> {
+export async function forceReLogin(): Promise<void> {
   liff.login();
-  await new Promise<never>(() => {}); // 以後は戻らない
+  await new Promise<never>(() => {}); // 実際には戻らない
 }
 
 export function logoutAndReload() {
