@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  initLiff,
-  ensureFreshIdToken,
-  forceReLogin,
-  logoutAndReload,
-  maybeLoginOnce,
-} from './liff';
-import {
-  authLoginWithIdToken,
-  authMe,
-  authLogout,
-} from './api';
+import { initLiff, ensureFreshIdToken, forceReLogin, logoutAndReload, maybeLoginOnce } from './liff';
+import { authLoginWithIdToken, authMe, authLogout } from './api';
 
 export default function App() {
   const [boot, setBoot] = useState<'booting' | 'ready'>('booting');
@@ -40,7 +30,8 @@ export default function App() {
   const handleForce = async () => {
     try {
       setErr(undefined);
-      const _ = await forceReLogin(); // リダイレクトで戻るので通常ここに戻らない
+      /** ★ 未使用変数を削除し、単に await に */
+      await forceReLogin(); // Promise<never> なので以降実行されない
     } catch (e: any) {
       setErr(e?.message || String(e));
     }
