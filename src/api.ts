@@ -88,3 +88,37 @@ export async function authLogout() {
   });
   setAccessToken(null);
 }
+
+// ユーザ登録追加(0923)
+export async function getProfile() {
+  const r = await apiFetch('/profile');
+  if (!r.ok) throw new Error(`profile get failed: ${r.status}`);
+  return r.json();
+}
+
+export async function updateProfile(input: {
+  nickname?: string; age?: number; gender?: string; occupation?: string;
+  photo_url?: string; photo_masked_url?: string;
+}) {
+  const r = await apiFetch('/profile', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`profile put failed: ${r.status}`);
+  return r.json();
+}
+
+export async function verifyAgeDummy() {
+  const r = await apiFetch('/verify/age', { method: 'POST', body: JSON.stringify({ method: 'upload_id' }) });
+  if (!r.ok) throw new Error(`verify age failed: ${r.status}`);
+  return r.json();
+}
+
+export async function setupPaymentDummy(brand?: string, last4?: string) {
+  const r = await apiFetch('/payments/setup', {
+    method: 'POST',
+    body: JSON.stringify({ brand, last4 }),
+  });
+  if (!r.ok) throw new Error(`payment setup failed: ${r.status}`);
+  return r.json();
+}
