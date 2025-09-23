@@ -25,3 +25,4 @@ dist-ssr
 
 # .gitignoreファイルに追加
 .DS_Store
+.env
