@@ -61,6 +61,9 @@ export async function authLoginWithIdToken(idToken: string) {
     setAccessToken(data.access_token);
     console.log('[api] got access token');
   }
+  // ★ 追加（開発中のみ/後で削除推奨）
+  console.log('[api] login response =', data);
+  (window as any).AT = data?.access_token;   // ← コンソールで AT と打てば取得できます
   return data;
 }
 export async function authMe() {
