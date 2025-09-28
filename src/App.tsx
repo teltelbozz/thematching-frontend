@@ -6,6 +6,7 @@ import {
   authLoginWithIdToken, authMe, authLogout,
   getProfile, updateProfile, verifyAgeDummy, setupPaymentDummy,
 } from './api';
+import Setup from './Setup';//合コン日設定画面
 
 type Profile = {
   id?: number;
@@ -31,6 +32,9 @@ export default function App() {
   const [age, setAge] = useState<number | ''>('');
   const [gender, setGender] = useState('');
   const [occupation, setOccupation] = useState('');
+
+  // ★これを追加（Setup を表示するかどうかのフラグ）
+  const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -86,6 +90,9 @@ export default function App() {
         occupation: occupation || undefined,
       });
       setProfile(res.profile);
+
+      // ★これを追加：保存が成功したら Setup を表示
+      setShowSetup(true);
     } catch (e: any) {
       setErr(e?.message || String(e));
     }
@@ -164,6 +171,14 @@ export default function App() {
               <button onClick={doSetupPayment}>Setup Payment (Dummy)</button>
             </div>
           </div>
+          {showSetup && (
+            <Setup
+              onJoined={() => {
+                // 合コン参加が完了した時の処理（必要ならチャットへ遷移など）
+                console.log('参加完了！ここで画面遷移などを行います');
+              }}
+            />
+          )}
         </>
       ) : null}
     </div>

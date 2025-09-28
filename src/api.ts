@@ -107,3 +107,43 @@ export async function setupPaymentDummy(brand?: string, last4?: string) {
   if (!r.ok) throw new Error(`payment setup failed: ${r.status}`);
   return r.json();
 }
+
+// プリファレンス
+export async function getPrefs() {
+  const r = await apiFetch('/prefs');
+  if (!r.ok) throw new Error(`prefs get failed: ${r.status}`);
+  return r.json();
+}
+export async function updatePrefs(input: {
+  participation_style?: 'solo' | 'with_friend';
+  party_size?: number;
+  type_mode?: 'talk' | 'play' | 'either';
+  venue_pref?: 'cheap_izakaya' | 'fancy_dining' | 'bar_cafe';
+  cost_pref?: 'men_pay_all' | 'split_even' | 'follow_partner';
+  saved_dates?: string[]; // 'YYYY-MM-DD'
+}) {
+  const r = await apiFetch('/prefs', { method: 'PUT', body: JSON.stringify(input) });
+  if (!r.ok) throw new Error(`prefs put failed: ${r.status}`);
+  return r.json();
+}
+
+// 人気日
+export async function getPopularDays() {
+  const r = await apiFetch('/calendar/popular');
+  if (!r.ok) throw new Error(`popular days failed: ${r.status}`);
+  return r.json(); // { days: [{day:'2025-09-20', slot_count:3}, ...] }
+}
+
+// 指定日のスロット（既存 GET /slots に date パラメタを付ける想定）
+export async function getSlotsByDate(dateISO: string) {
+  const r = await apiFetch(`/slots?date=${encodeURIComponent(dateISO)}`);
+  if (!r.ok) throw new Error(`slots by date failed: ${r.status}`);
+  return r.json();
+}
+
+// 参加
+export async function joinSlot(slotId: number | string) {
+  const r = await apiFetch(`/slots/${slotId}/join`, { method: 'POST' });
+  if (!r.ok) throw new Error(`join failed: ${r.status}`);
+  return r.json(); // { ok: true }
+}
