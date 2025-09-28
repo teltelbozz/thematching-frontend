@@ -147,3 +147,26 @@ export async function joinSlot(slotId: number | string) {
   if (!r.ok) throw new Error(`join failed: ${r.status}`);
   return r.json(); // { ok: true }
 }
+
+// 設定画面
+export async function getSetup() {
+  const r = await apiFetch('/setup');
+  if (!r.ok) throw new Error(`setup get failed: ${r.status}`);
+  return r.json(); // { setup: {...} | null }
+}
+
+export async function saveSetup(input: {
+  participation_style?: 'solo' | 'with_friend';
+  party_size?: number;
+  desired_date?: string; // YYYY-MM-DD
+  type_mode?: 'talk' | 'play' | 'either';
+  venue_pref?: 'cheap_izakaya' | 'fancy_dining' | 'bar_cafe';
+  cost_pref?: 'men_pay_all' | 'split_even' | 'follow_partner';
+}) {
+  const r = await apiFetch('/setup', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`setup put failed: ${r.status}`);
+  return r.json(); // { setup: {...} }
+}
