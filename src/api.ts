@@ -37,3 +37,5 @@ export const getPrefs = () => apiGetJson('/prefs');
 export const savePrefs = (input:any) => apiPutJson('/prefs', input);
 export const getSetup = () => apiGetJson('/setup');
 export const saveSetup = (input:any) => apiPutJson('/setup', input);
+export const getProfile = () => apiGetJson('/profile');
+export const saveProfile = (input:any) => apiPutJson('/profile', input);
