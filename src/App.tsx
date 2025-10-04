@@ -3,6 +3,8 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import { initLiff } from './liff';
 import Menu from './screens/Menu';
 import Setup from './Setup';
+import MyPage from './screens/MyPage';
+import ProfileScreen from './screens/Profile';
 import './styles.css';
 
 const Placeholder = ({ title }: { title: string }) => (
@@ -66,7 +68,8 @@ export default function App() {
       <Route path="/friends" element={<Setup onJoined={() => navigate('/mypage')} />} />
       <Route path="/flow" element={<Placeholder title="合コンの流れ" />} />
       <Route path="/about" element={<Placeholder title="サービス概要" />} />
-      <Route path="/mypage" element={<Placeholder title="マイページ" />} />
+      <Route path="/mypage" element={<MyPage />} />
+      <Route path="/profile" element={<ProfileScreen />} />
       <Route path="/faq" element={<Placeholder title="よくある質問" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
