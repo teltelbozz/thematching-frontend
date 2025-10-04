@@ -1,10 +1,11 @@
 // src/App.tsx
 import { useEffect, useState } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate,useLocation } from 'react-router-dom';
 import { initLiff } from './liff';       // 既存: LIFF 初期化
 import Menu from './screens/Menu';       // 新規: 6タイルのメニュー
 import Setup from './Setup';             // 既存: 合コン設定（希望条件＋日付 保存→参加）
 import './styles.css';                   // グローバルスタイル（The4風配色など）
+
 
 /**
  * 画面未実装のプレースホルダ
@@ -26,6 +27,18 @@ export default function App() {
   const nav = useNavigate();
   const [boot, setBoot] = useState<'booting' | 'ready' | 'error'>('booting');
   const [err, setErr] = useState<string>();
+
+  const loc = useLocation();
+
+  useEffect(() => {
+    // 例: https://liff.line.me/LIFF_ID?r=%2Fsolo
+    const sp = new URLSearchParams(loc.search);
+    const r = sp.get('r');
+    if (r && typeof r === 'string') {
+      // 安全側: 先頭がスラッシュの相対パスのみ許可（外部ドメイン遷移はしない）
+      if (r.startsWith('/')) nav(r, { replace: true });
+    }
+  }, []); // 初回のみ
 
   useEffect(() => {
     (async () => {
