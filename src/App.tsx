@@ -1,186 +1,87 @@
+// src/App.tsx
 import { useEffect, useState } from 'react';
-import {
-  initLiff, ensureFreshIdToken, forceReLogin, logoutAndReload, maybeLoginOnce,
-} from './liff';
-import {
-  authLoginWithIdToken, authMe, authLogout,
-  getProfile, updateProfile, verifyAgeDummy, setupPaymentDummy,
-} from './api';
-import Setup from './Setup';//合コン日設定画面
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { initLiff } from './liff';       // 既存: LIFF 初期化
+import Menu from './screens/Menu';       // 新規: 6タイルのメニュー
+import Setup from './Setup';             // 既存: 合コン設定（希望条件＋日付 保存→参加）
+import './styles.css';                   // グローバルスタイル（The4風配色など）
 
-type Profile = {
-  id?: number;
-  line_user_id?: string;
-  nickname?: string;
-  age?: number;
-  gender?: string;
-  occupation?: string;
-  photo_url?: string;
-  photo_masked_url?: string;
-  verified_age?: boolean;
-  payment_method_set?: boolean;
-};
+/**
+ * 画面未実装のプレースホルダ
+ */
+const Placeholder = ({ title }: { title: string }) => (
+  <div className="safe">
+    <h2 style={{ margin: '8px 0 12px' }}>{title}</h2>
+    <p style={{ color: '#9aa0a6' }}>この画面は今後実装します。</p>
+  </div>
+);
 
+/**
+ * アプリのエントリ
+ * - 起動時に LIFF を初期化
+ * - 初期化が終わるまでローディング表示
+ * - ルーティング：メニューをトップにし、各タイルへ遷移
+ */
 export default function App() {
-  const [boot, setBoot] = useState<'booting' | 'ready'>('booting');
-  const [me, setMe]   = useState<any>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const nav = useNavigate();
+  const [boot, setBoot] = useState<'booting' | 'ready' | 'error'>('booting');
   const [err, setErr] = useState<string>();
-
-  // フォーム用のローカル状態
-  const [nick, setNick] = useState('');
-  const [age, setAge] = useState<number | ''>('');
-  const [gender, setGender] = useState('');
-  const [occupation, setOccupation] = useState('');
-
-  // ★これを追加（Setup を表示するかどうかのフラグ）
-  const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         await initLiff();
         setBoot('ready');
-
-        await maybeLoginOnce(async () => {
-          const idToken = await ensureFreshIdToken(60_000);
-          console.log('[liff] idToken present?', !!idToken, 'len=', idToken?.length);
-          await authLoginWithIdToken(idToken);
-          const m = await authMe();
-          setMe(m.user);
-
-          const p = await getProfile();
-          setProfile(p.profile || null);
-          if (p.profile?.nickname) setNick(p.profile.nickname);
-          if (typeof p.profile?.age === 'number') setAge(p.profile.age);
-          if (p.profile?.gender) setGender(p.profile.gender);
-          if (p.profile?.occupation) setOccupation(p.profile.occupation);
-        });
       } catch (e: any) {
-        console.error(e);
+        console.error('[App] liff init error:', e);
         setErr(e?.message || String(e));
+        setBoot('error');
       }
     })();
   }, []);
 
-  const handleForce = async () => {
-    try {
-      setErr(undefined);
-      await forceReLogin(); // 実際には戻らない想定
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  };
+  if (boot === 'booting') {
+    return (
+      <div className="safe" style={{ opacity: 0.85 }}>
+        <div className="menu-title">読み込み中...</div>
+        <div style={{ color: '#9aa0a6', fontSize: 12 }}>
+          LINEログインと設定を準備しています
+        </div>
+      </div>
+    );
+  }
 
-  const handleLogout = async () => {
-    try {
-      await authLogout();
-    } finally {
-      logoutAndReload();
-    }
-  };
-
-  const saveProfile = async () => {
-    setErr(undefined);
-    try {
-      const res = await updateProfile({
-        nickname: nick || undefined,
-        age: typeof age === 'number' ? age : undefined,
-        gender: gender || undefined,
-        occupation: occupation || undefined,
-      });
-      setProfile(res.profile);
-
-      // ★これを追加：保存が成功したら Setup を表示
-      setShowSetup(true);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  };
-
-  const doVerifyAge = async () => {
-    setErr(undefined);
-    try {
-      const r = await verifyAgeDummy();
-      console.log('[verifyAge]', r);
-      const p = await getProfile();
-      setProfile(p.profile || null);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  };
-
-  const doSetupPayment = async () => {
-    setErr(undefined);
-    try {
-      const r = await setupPaymentDummy('visa', '4242');
-      console.log('[setupPayment]', r);
-      const m = await authMe();         // users.payment_method_set は /me にも出る運用でもOK
-      setMe(m.user);
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
-  };
+  if (boot === 'error') {
+    return (
+      <div className="safe">
+        <div className="menu-title">起動エラー</div>
+        <div style={{ color: '#e87d7d', marginBottom: 12 }}>{err}</div>
+        <button className="tile" style={{ width: 180, height: 44 }} onClick={() => location.reload()}>
+          再読み込み
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 16, fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto' }}>
-      <h1>thematching LIFF</h1>
-      <div>status: {boot}</div>
+    <Routes>
+      {/* ホーム：6タイルのメニュー */}
+      <Route path="/" element={<Menu />} />
 
-      {err && (
-        <div style={{ color: 'crimson', marginTop: 8 }}>
-          <div><b>Login failed:</b> {err}</div>
-          <button style={{ marginTop: 8 }} onClick={handleForce}>
-            Force Re-Login
-          </button>
-        </div>
-      )}
+      {/* 一人で合コン → 合コン設定（Setup）へ。完了後はマイページに遷移 */}
+      <Route path="/solo" element={<Setup onJoined={() => nav('/mypage')} />} />
 
-      {me ? (
-        <>
-          <div style={{ marginTop: 12, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-            <div><b>Logged in</b></div>
-            <div>uid: {me.id}</div>
-            <div>line_user_id: {me.line_user_id}</div>
-            <div>payment_method_set: {String(me.payment_method_set)}</div>
-            <button style={{ marginTop: 8 }} onClick={handleLogout}>Logout</button>
-          </div>
+      {/* 友達と合コン → 同じく Setup へ（将来、初期値や人数を分岐させるなら props を追加） */}
+      <Route path="/friends" element={<Setup onJoined={() => nav('/mypage')} />} />
 
-          <div style={{ marginTop: 16, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-            <div><b>Profile</b></div>
-            <div>verified_age: {String(profile?.verified_age)}</div>
-            <div style={{ marginTop: 8, display: 'grid', gap: 8, maxWidth: 360 }}>
-              <label>Nickname
-                <input style={{ width: '100%' }} value={nick} onChange={e => setNick(e.target.value)} />
-              </label>
-              <label>Age
-                <input style={{ width: '100%' }} inputMode="numeric"
-                       value={age} onChange={e => setAge(e.target.value ? Number(e.target.value) : '')} />
-              </label>
-              <label>Gender
-                <input style={{ width: '100%' }} value={gender} onChange={e => setGender(e.target.value)} />
-              </label>
-              <label>Occupation
-                <input style={{ width: '100%' }} value={occupation} onChange={e => setOccupation(e.target.value)} />
-              </label>
-              <button onClick={saveProfile}>Save Profile</button>
-            </div>
+      {/* 以降はプレースホルダ（順次実装） */}
+      <Route path="/flow" element={<Placeholder title="合コンの流れ" />} />
+      <Route path="/about" element={<Placeholder title="サービス概要" />} />
+      <Route path="/mypage" element={<Placeholder title="マイページ" />} />
+      <Route path="/faq" element={<Placeholder title="よくある質問" />} />
 
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <button onClick={doVerifyAge}>Verify Age (Dummy)</button>
-              <button onClick={doSetupPayment}>Setup Payment (Dummy)</button>
-            </div>
-          </div>
-          {showSetup && (
-            <Setup
-              onJoined={() => {
-                // 合コン参加が完了した時の処理（必要ならチャットへ遷移など）
-                console.log('参加完了！ここで画面遷移などを行います');
-              }}
-            />
-          )}
-        </>
-      ) : null}
-    </div>
+      {/* 不明なパスはホームへ */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
