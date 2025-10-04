@@ -1,126 +1,106 @@
-import React, { useEffect, useState } from "react";
-import { getAccessToken } from "../liff";
-import { apiGet, apiPost } from "../api";
+import { useEffect, useState } from 'react';
+import { whenAuthReady } from './liff';
+import { getPrefs, savePrefs, getSetup, saveSetup } from './api';
 
+type Props = { onJoined?: () => void | Promise<void> };
 type Prefs = {
-  style: string;
-  type: string;
-  place: string;
-  cost: string;
-  date: string;
+  participation_style?: 'solo'|'with_friend';
+  party_size?: number;
+  type_mode?: 'talk'|'play'|'either';
+  venue_pref?: 'cheap_izakaya'|'fancy_dining'|'bar_cafe';
+  cost_pref?: 'men_pay_all'|'split_even'|'follow_partner';
 };
+type Setup = Prefs & { desired_date?: string };
 
-export default function Setup() {
-  const [prefs, setPrefs] = useState<Prefs>({
-    style: "一人で参加",
-    type: "どちらでも良い",
-    place: "安ウマ居酒屋",
-    cost: "全員で割り勘がいい",
-    date: "",
-  });
-  const [status, setStatus] = useState<string>("loading");
+export default function Setup({ onJoined }: Props){
+  const [prefs, setPrefs] = useState<Prefs>({ participation_style:'solo', type_mode:'either', venue_pref:'cheap_izakaya', cost_pref:'split_even', party_size:1 });
+  const [setup, setSetup] = useState<Setup>({ desired_date:'' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string|undefined>();
 
-  // 初期ロード：サーバから設定を取得
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        console.log("[Setup] access token =", token);
-
-        if (!token) {
-          setStatus("no access token");
-          return;
-        }
-
-        const res = await apiGet("/prefs", token);
-        console.log("[Setup] GET /prefs response =", res);
-
-        if (res && res.prefs) {
-          setPrefs(res.prefs);
-        }
-        setStatus("ready");
-      } catch (err: any) {
-        console.error("[Setup] prefs get failed", err);
-        setStatus("prefs get failed: " + (err.message || "error"));
+  useEffect(()=>{
+    (async ()=>{
+      try{
+        await whenAuthReady();
+        const p = await getPrefs().catch(()=>null);
+        if (p?.prefs) setPrefs(p.prefs);
+        const s = await getSetup().catch(()=>null);
+        if (s?.setup) setSetup(s.setup);
+      }catch(e:any){
+        console.error('[Setup] init failed', e);
+        setError(e?.message || String(e));
+      }finally{
+        setLoading(false);
       }
     })();
-  }, []);
+  },[]);
 
-  // 保存処理
-  const savePrefs = async () => {
-    try {
-      const token = await getAccessToken();
-      console.log("[Setup] saving prefs with token", token);
-
-      const res = await apiPost("/prefs", prefs, token);
-      console.log("[Setup] POST /prefs response =", res);
-
-      alert("保存しました！");
-    } catch (err: any) {
-      console.error("[Setup] prefs save failed", err);
-      alert("保存に失敗しました: " + (err.message || "error"));
+  async function handleSave(){
+    try{
+      await savePrefs(prefs);
+      await saveSetup(setup);
+      alert('保存しました！');
+      await onJoined?.();
+    }catch(e:any){
+      alert('保存に失敗: ' + (e?.message || String(e)));
     }
-  };
+  }
+
+  if (loading) return <div className="safe">読み込み中...</div>;
+  if (error) return <div className="safe" style={{color:'#e87d7d'}}>エラー: {error}</div>;
 
   return (
-    <div style={{ padding: "20px", color: "white", background: "black" }}>
-      <h2>合コン設定</h2>
-      <p>{status}</p>
+    <div className="safe">
+      <div className="menu-title">合コン設定</div>
 
-      <label>参加スタイル：</label>
-      <select
-        value={prefs.style}
-        onChange={(e) => setPrefs({ ...prefs, style: e.target.value })}
-      >
-        <option>一人で参加</option>
-        <option>友達と参加</option>
-      </select>
-      <br />
+      <div style={{display:'grid', gap:12}}>
+        <label>
+          参加スタイル：
+          <select value={prefs.participation_style} onChange={e=>setPrefs({...prefs, participation_style: e.target.value as any})}>
+            <option value="solo">一人で参加</option>
+            <option value="with_friend">友達と参加</option>
+          </select>
+        </label>
 
-      <label>合コンの種類：</label>
-      <select
-        value={prefs.type}
-        onChange={(e) => setPrefs({ ...prefs, type: e.target.value })}
-      >
-        <option>どちらでも良い</option>
-        <option>話す（居酒屋/ダイニング）</option>
-        <option>遊ぶ（シーシャ/ダーツ）</option>
-      </select>
-      <br />
+        <label>
+          人数：
+          <input type="number" min={1} max={4} value={prefs.party_size ?? 1} onChange={e=>setPrefs({...prefs, party_size: Number(e.target.value)})} />
+        </label>
 
-      <label>お店について：</label>
-      <select
-        value={prefs.place}
-        onChange={(e) => setPrefs({ ...prefs, place: e.target.value })}
-      >
-        <option>安ウマ居酒屋</option>
-        <option>お洒落ダイニング</option>
-        <option>BAR/夜カフェ</option>
-      </select>
-      <br />
+        <label>
+          合コンの種類：
+          <select value={prefs.type_mode} onChange={e=>setPrefs({...prefs, type_mode: e.target.value as any})}>
+            <option value="either">どちらでも良い</option>
+            <option value="talk">話す（居酒屋/ダイニング）</option>
+            <option value="play">遊ぶ（シーシャ/ダーツ）</option>
+          </select>
+        </label>
 
-      <label>合コン費用：</label>
-      <select
-        value={prefs.cost}
-        onChange={(e) => setPrefs({ ...prefs, cost: e.target.value })}
-      >
-        <option>男性が全て払う</option>
-        <option>全員で割り勘がいい</option>
-        <option>相手に合わせる</option>
-      </select>
-      <br />
+        <label>
+          お店について：
+          <select value={prefs.venue_pref} onChange={e=>setPrefs({...prefs, venue_pref: e.target.value as any})}>
+            <option value="cheap_izakaya">安ウマ居酒屋</option>
+            <option value="fancy_dining">お洒落ダイニング</option>
+            <option value="bar_cafe">BAR/夜カフェ</option>
+          </select>
+        </label>
 
-      <label>合コン参加日：</label>
-      <input
-        type="date"
-        value={prefs.date}
-        onChange={(e) => setPrefs({ ...prefs, date: e.target.value })}
-      />
-      <br />
+        <label>
+          合コン費用：
+          <select value={prefs.cost_pref} onChange={e=>setPrefs({...prefs, cost_pref: e.target.value as any})}>
+            <option value="split_even">全員で割り勘がいい</option>
+            <option value="men_pay_all">男性が全て払う</option>
+            <option value="follow_partner">相手に合わせる</option>
+          </select>
+        </label>
 
-      <button onClick={savePrefs} style={{ marginTop: "10px" }}>
-        条件を保存して、この日のスロットを検索
-      </button>
+        <label>
+          合コン参加日：
+          <input type="date" value={setup.desired_date || ''} onChange={e=>setSetup({...setup, desired_date: e.target.value})} />
+        </label>
+
+        <button className="tile" style={{height:48}} onClick={handleSave}>条件を保存</button>
+      </div>
     </div>
   );
 }

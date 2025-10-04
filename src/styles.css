@@ -1,47 +1,27 @@
-/* src/styles.css */
 :root{
-  --bg:#0e0e10;          /* ほぼ黒 */
+  --bg:#0e0e10;
   --panel:#111214;
   --tile:#15161a;
   --tile-hover:#1b1c21;
   --text:#eaeaea;
   --muted:#9aa0a6;
-  --gold:#e6c36a;        /* アクセント（The4風） */
+  --gold:#e6c36a;
   --radius:14px;
 }
-
 *{box-sizing:border-box}
 html,body,#root{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;}
-
-.safe{
-  padding:16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-}
-
-.menu-title{
-  font-size:20px;font-weight:700;letter-spacing:.5px;margin:4px 0 12px;
-}
-
-.grid6{
-  display:grid;gap:12px;
-  grid-template-columns: repeat(3, 1fr);
-}
-
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;}
+.safe{padding:16px; padding-bottom:max(16px,env(safe-area-inset-bottom));}
+.menu-title{font-size:20px;font-weight:700;letter-spacing:.5px;margin:4px 0 12px;}
+.grid6{display:grid;gap:12px;grid-template-columns: repeat(3, 1fr);}
 .tile{
-  background:var(--tile);
-  border-radius:var(--radius);
+  background:var(--tile);border-radius:var(--radius);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:112px;
-  border:1px solid #20222a;
-  transition:.15s ease;
+  height:112px;border:1px solid #20222a;transition:.15s ease;
 }
 .tile:hover{background:var(--tile-hover)}
 .tile .icon{width:38px;height:38px;margin-bottom:10px}
 .tile .label{font-size:14px;font-weight:700;text-align:center;line-height:1.3}
-
 .tile.gold{border-color:#40361a;box-shadow: inset 0 0 0 1px #40361a}
 .tile.gold .label{color:var(--gold)}
-.tile.gold .icon path{stroke:var(--gold)}
-
 .footer-note{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}

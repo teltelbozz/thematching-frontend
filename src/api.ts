@@ -1,175 +1,39 @@
-// API ベースURL（Vercel の環境変数 VITE_API_BASE を使用）
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE || 'https://thematching-backend.vercel.app/api';
+let ACCESS_TOKEN: string | null = null;
 
-let accessToken: string | null = null;
+export function setAccessToken(t: string){
+  ACCESS_TOKEN = t;
+}
+export function getAccessToken(){ return ACCESS_TOKEN; }
 
-export function setAccessToken(token: string | null) {
-  accessToken = token;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || (import.meta.env.VITE_API_BASE as string);
+
+function base(path: string){
+  return API_BASE.replace(/\/+$/, '') + path;
 }
 
-// ── 共通：access 再発行（Cookieベース）
-async function refreshAccess(): Promise<boolean> {
-  const resp = await fetch(`${API_BASE}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-  if (!resp.ok) return false;
-  const data = await resp.json().catch(() => ({}));
-  if (data?.access_token) {
-    setAccessToken(data.access_token);
-    console.log('[api] refreshed access token');
-    return true;
-  }
-  return false;
-}
-
-// ── 共通：フェッチ（401→refresh→1回だけ再試行）
-export async function apiFetch(
-  path: string,
-  init: RequestInit = {},
-  retry = true
-): Promise<Response> {
+export async function apiFetch(path: string, init: RequestInit = {}){
+  if (!API_BASE) throw new Error('missing VITE_API_BASE_URL (or VITE_API_BASE)');
   const headers = new Headers(init.headers || {});
-  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  if (init.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  const resp = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-  });
-  if (resp.status === 401 && retry) {
-    const ok = await refreshAccess();
-    if (ok) return apiFetch(path, init, false);
-  }
-  return resp;
+  if (!headers.has('Content-Type') && init.body) headers.set('Content-Type','application/json');
+  if (ACCESS_TOKEN) headers.set('Authorization', 'Bearer ' + ACCESS_TOKEN);
+  const res = await fetch(base(path), { credentials:'include', ...init, headers });
+  return res;
 }
 
-// ── 認証系
-export async function authLoginWithIdToken(idToken: string) {
-  console.log('[api] POST', `${API_BASE}/auth/login`);
-  const resp = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include', // refresh Cookie を受け取る
-    body: JSON.stringify({ id_token: idToken }),
-  });
-  if (!resp.ok) throw new Error(`login failed: ${resp.status}`);
-  const data = await resp.json();
-  if (data?.access_token) {
-    setAccessToken(data.access_token);
-    console.log('[api] got access token');
-  }
-  // ★ 追加（開発中のみ/後で削除推奨）
-  console.log('[api] login response =', data);
-  (window as any).AT = data?.access_token;   // ← コンソールで AT と打てば取得できます
-  return data;
-}
-export async function authMe() {
-  const r = await apiFetch('/auth/me');
-  if (!r.ok) throw new Error(`me failed: ${r.status}`);
-  return r.json();
-}
-export async function authLogout() {
-  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-  setAccessToken(null);
-}
-
-// ── プロフィール
-export async function getProfile() {
-  const r = await apiFetch('/profile');
-  if (!r.ok) throw new Error(`profile get failed: ${r.status}`);
-  return r.json();
-}
-export async function updateProfile(input: {
-  nickname?: string; age?: number; gender?: string; occupation?: string;
-  photo_url?: string; photo_masked_url?: string;
-}) {
-  const r = await apiFetch('/profile', { method: 'PUT', body: JSON.stringify(input) });
-  if (!r.ok) throw new Error(`profile put failed: ${r.status}`);
+export async function apiGetJson<T=any>(path: string): Promise<T>{
+  const r = await apiFetch(path);
+  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json();
 }
 
-// ── 年齢確認（ダミー）
-export async function verifyAgeDummy() {
-  const r = await apiFetch('/verify/age', {
-    method: 'POST',
-    body: JSON.stringify({ method: 'upload_id' }), // 今は何でもOK
-  });
-  if (!r.ok) throw new Error(`verify age failed: ${r.status}`);
+export async function apiPutJson<T=any>(path: string, body: any): Promise<T>{
+  const r = await apiFetch(path, { method:'PUT', body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json();
 }
 
-// ── 決済登録（ダミー）
-export async function setupPaymentDummy(brand?: string, last4?: string) {
-  const r = await apiFetch('/payments/setup', {
-    method: 'POST',
-    body: JSON.stringify({ brand, last4 }),
-  });
-  if (!r.ok) throw new Error(`payment setup failed: ${r.status}`);
-  return r.json();
-}
-
-// プリファレンス
-export async function getPrefs() {
-  const r = await apiFetch('/prefs');
-  if (!r.ok) throw new Error(`prefs get failed: ${r.status}`);
-  return r.json();
-}
-export async function updatePrefs(input: {
-  participation_style?: 'solo' | 'with_friend';
-  party_size?: number;
-  type_mode?: 'talk' | 'play' | 'either';
-  venue_pref?: 'cheap_izakaya' | 'fancy_dining' | 'bar_cafe';
-  cost_pref?: 'men_pay_all' | 'split_even' | 'follow_partner';
-  saved_dates?: string[]; // 'YYYY-MM-DD'
-}) {
-  const r = await apiFetch('/prefs', { method: 'PUT', body: JSON.stringify(input) });
-  if (!r.ok) throw new Error(`prefs put failed: ${r.status}`);
-  return r.json();
-}
-
-// 人気日
-export async function getPopularDays() {
-  const r = await apiFetch('/calendar/popular');
-  if (!r.ok) throw new Error(`popular days failed: ${r.status}`);
-  return r.json(); // { days: [{day:'2025-09-20', slot_count:3}, ...] }
-}
-
-// 指定日のスロット（既存 GET /slots に date パラメタを付ける想定）
-export async function getSlotsByDate(dateISO: string) {
-  const r = await apiFetch(`/slots?date=${encodeURIComponent(dateISO)}`);
-  if (!r.ok) throw new Error(`slots by date failed: ${r.status}`);
-  return r.json();
-}
-
-// 参加
-export async function joinSlot(slotId: number | string) {
-  const r = await apiFetch(`/slots/${slotId}/join`, { method: 'POST' });
-  if (!r.ok) throw new Error(`join failed: ${r.status}`);
-  return r.json(); // { ok: true }
-}
-
-// 合コン設定画面
-export async function getSetup() {
-  const r = await apiFetch('/setup');
-  if (!r.ok) throw new Error(`setup get failed: ${r.status}`);
-  return r.json(); // { setup: {...} | null }
-}
-
-export async function saveSetup(input: {
-  participation_style?: 'solo' | 'with_friend';
-  party_size?: number;
-  desired_date?: string; // YYYY-MM-DD
-  type_mode?: 'talk' | 'play' | 'either';
-  venue_pref?: 'cheap_izakaya' | 'fancy_dining' | 'bar_cafe';
-  cost_pref?: 'men_pay_all' | 'split_even' | 'follow_partner';
-}) {
-  const r = await apiFetch('/setup', {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  });
-  if (!r.ok) throw new Error(`setup put failed: ${r.status}`);
-  return r.json(); // { setup: {...} }
-}
+// domain specific helpers
+export const getPrefs = () => apiGetJson('/prefs');
+export const savePrefs = (input:any) => apiPutJson('/prefs', input);
+export const getSetup = () => apiGetJson('/setup');
+export const saveSetup = (input:any) => apiPutJson('/setup', input);

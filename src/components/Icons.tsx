@@ -1,4 +1,3 @@
-// src/components/Icons.tsx
 import React from 'react';
 
 export const People = (props: React.SVGProps<SVGSVGElement>) => (
@@ -29,7 +28,8 @@ export const Home = (props: React.SVGProps<SVGSVGElement>) => (
 
 export const Gear = (props: React.SVGProps<SVGSVGElement>) => (
   <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="#d9d9d9" strokeWidth="1.7" {...props}>
-    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .3 1.9l.1.1-1.7 3a1.9 1.9 0 0 1-2.1.9l-1.5-.5a7.2 7.2 0 0 1-2.1.9l-.3 1.5a1.9 1.9 0 0 1-1.9 1.5H10a1.9 1.9 0 0 1-1.9-1.5l-.3-1.5a7.2 7.2 0 0 1-2.1-.9l-1.5.5a1.9 1.9 0 0 1-2.1-.9l-1.7-3 .1-.1A1.8 1.8 0 0 0 4.6 15a7.7 7.7 0 0 1 0-2 1.8 1.8 0 0 0-.3-1.9l-.1-.1 1.7-3a1.9 1.9 0 0 1 2.1-.9l1.5.5a7.2 7.2 0 0 1 2.1-.9l.3-1.5A1.9 1.9 0 0 1 12 1h0a1.9 1.9 0 0 1 1.9 1.5l.3 1.5a7.2 7.2 0 0 1 2.1.9l1.5-.5a1.9 1.9 0 0 1 2.1.9l1.7 3-.1.1a1.8 1.8 0 0 0-.3 1.9 7.7 7.7 0 0 1 0 2z"/>
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19 12a7 7 0 1 1-7-7" />
   </svg>
 );
 
