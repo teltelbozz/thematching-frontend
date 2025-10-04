@@ -151,7 +151,7 @@ export async function joinSlot(slotId: number | string) {
   return r.json(); // { ok: true }
 }
 
-// 設定画面
+// 合コン設定画面
 export async function getSetup() {
   const r = await apiFetch('/setup');
   if (!r.ok) throw new Error(`setup get failed: ${r.status}`);
