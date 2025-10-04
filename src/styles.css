@@ -1,27 +1,140 @@
 :root{
+  /* 色 */
   --bg:#0e0e10;
   --panel:#111214;
   --tile:#15161a;
   --tile-hover:#1b1c21;
-  --text:#eaeaea;
-  --muted:#9aa0a6;
+  --line:#20222a;
+  --text:#ececec;
+  --muted:#a7aab0;
   --gold:#e6c36a;
-  --radius:14px;
+
+  /* 余白/角丸/高さ */
+  --radius:16px;
+  --gap:14px;
+  --ctrl-h:48px;   /* タップしやすい高さ */
+  --font:16.5px;   /* モバイルで見やすい既定サイズ(>=16pxでズーム回避) */
+  --font-sm:14px;
+  --font-lg:20px;
+  --font-xl:24px;
 }
-*{box-sizing:border-box}
-html,body,#root{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;}
-.safe{padding:16px; padding-bottom:max(16px,env(safe-area-inset-bottom));}
-.menu-title{font-size:20px;font-weight:700;letter-spacing:.5px;margin:4px 0 12px;}
-.grid6{display:grid;gap:12px;grid-template-columns: repeat(3, 1fr);}
-.tile{
-  background:var(--tile);border-radius:var(--radius);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:112px;border:1px solid #20222a;transition:.15s ease;
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  font-size: var(--font);
+  -webkit-font-smoothing: antialiased;
 }
-.tile:hover{background:var(--tile-hover)}
-.tile .icon{width:38px;height:38px;margin-bottom:10px}
-.tile .label{font-size:14px;font-weight:700;text-align:center;line-height:1.3}
-.tile.gold{border-color:#40361a;box-shadow: inset 0 0 0 1px #40361a}
-.tile.gold .label{color:var(--gold)}
-.footer-note{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
+
+.safe {
+  padding: 18px;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
+
+/* ページタイトル */
+.page-title {
+  font-size: var(--font-xl);
+  font-weight: 800;
+  letter-spacing: .3px;
+  margin: 4px 0 14px;
+}
+
+/* セクションカード */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gap);
+}
+
+/* フォーム基礎 */
+.form { display: grid; gap: var(--gap); }
+.field { display: grid; gap: 8px; }
+.field-label {
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+/* 入力・選択・ボタンの共通外観 */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select,
+.button {
+  height: var(--ctrl-h);
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid var(--line);
+  background: #14151a;
+  color: var(--text);
+  padding: 0 14px;
+  outline: none;
+  font-size: var(--font);
+}
+
+select {
+  padding-right: 34px;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8a8f98 50%),
+    linear-gradient(135deg, #8a8f98 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) calc(50% + 1px),
+    calc(100% - 14px) calc(50% + 1px);
+  background-size: 7px 7px, 7px 7px;
+  background-repeat: no-repeat;
+}
+
+input:focus, select:focus { border-color: #2a7cf7; }
+
+/* 主要ボタン */
+.btn-primary {
+  background: #2a7cf7;
+  border-color: #2a7cf7;
+  font-weight: 700;
+}
+.btn-primary:active { filter: brightness(.95); }
+
+/* タイルメニュー（ホームの6分割） */
+.grid6 { display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); }
+.tile {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  height: 118px;
+  transition: .15s ease;
+}
+.tile:hover { background: var(--tile-hover); }
+.tile .icon { width: 42px; height: 42px; margin-bottom: 10px; }
+.tile .label { font-size: 15px; font-weight: 700; text-align:center; }
+.tile.gold { border-color:#3b3318; box-shadow: inset 0 0 0 1px #3b3318; }
+.tile.gold .label { color: var(--gold); }
+
+/* タブ風ボタン */
+.tabs { display:flex; gap: 10px; margin-bottom: 14px; }
+.tab {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+.tab.active {
+  background: #15161a;
+  color: var(--text);
+}
+
+/* 補助テキスト */
+.text-muted { color: var(--muted); font-size: var(--font-sm); }
+
+/* スマホ横幅が狭い端末で若干ゆったり */
+@media (max-width: 360px) {
+  :root { --font: 17px; --ctrl-h: 50px; }
+  .tile { height: 120px; }
+}
