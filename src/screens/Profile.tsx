@@ -2,34 +2,38 @@
 import { useEffect, useState } from 'react';
 import { whenAuthReady } from '../liff';
 import { getProfile, saveProfile } from '../api';
+import { useNavigate } from 'react-router-dom';
 
-type ProfilePayload = {
+type ProfileData = {
   profile?: {
     displayName?: string;
     picture?: string;
-    ageVerified?: boolean; // 将来拡張用（ダミーでもOK）
+    ageVerified?: boolean;
   };
 };
 
 export default function Profile() {
+  const nav = useNavigate();
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [displayName, setDisplayName] = useState('');
-  const [picture, setPicture] = useState('');
+  const [displayName, setDisplayName] = useState<string>('');
+  const [picture, setPicture] = useState<string>('');
+  const [ageVerified, setAgeVerified] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
       try {
         await whenAuthReady();
-        const data = (await getProfile().catch(() => null)) as ProfilePayload | null;
-        if (data?.profile?.displayName) setDisplayName(data.profile.displayName);
-        if (data?.profile?.picture) setPicture(data.profile.picture);
-        setLoaded(true);
+        const data = (await getProfile()) as ProfileData;
+        setDisplayName(data?.profile?.displayName ?? '');
+        setPicture(data?.profile?.picture ?? '');
+        setAgeVerified(Boolean(data?.profile?.ageVerified));
       } catch (e: any) {
-        console.error('[Profile] init failed', e);
-        setError(e?.message ?? 'initialize_failed');
+        setErr(e?.message ?? 'プロフィール取得に失敗しました');
+      } finally {
+        setLoaded(true);
       }
     })();
   }, []);
@@ -37,40 +41,49 @@ export default function Profile() {
   async function onSave() {
     try {
       setSaving(true);
+      setErr(null);
       await saveProfile({
         profile: {
           displayName: displayName || 'ユーザー',
           picture: picture || undefined,
+          ageVerified,
         },
       });
-      alert('保存しました');
+      // 保存後は合コン設定へ遷移
+      nav('/setup', { replace: true });
     } catch (e: any) {
-      console.error('[Profile] save failed', e);
-      alert('保存に失敗しました: ' + (e?.message ?? 'unknown_error'));
+      setErr(e?.message ?? 'プロフィール保存に失敗しました');
     } finally {
       setSaving(false);
     }
   }
 
-  if (error) return <div style={{ padding: 16, color: 'red' }}>エラー: {error}</div>;
-  if (!loaded) return <div style={{ padding: 16 }}>読み込み中...</div>;
+  if (!loaded) {
+    return (
+      <div style={page}>
+        <h1 style={title}>プロフィール</h1>
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ marginBottom: 12 }}>プロフィール</h2>
+    <div style={page}>
+      <h1 style={title}>プロフィール</h1>
+      {err && <p style={errorBox}>{err}</p>}
 
-      <div style={field}>
+      <div style={formRow}>
         <label style={label}>表示名</label>
         <input
           style={input}
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="表示名"
+          placeholder="ニックネーム"
         />
       </div>
 
-      <div style={field}>
-        <label style={label}>アイコンURL（任意）</label>
+      <div style={formRow}>
+        <label style={label}>写真URL（任意）</label>
         <input
           style={input}
           value={picture}
@@ -79,19 +92,50 @@ export default function Profile() {
         />
       </div>
 
-      <button onClick={onSave} disabled={saving} style={primaryBtn}>
-        {saving ? '保存中...' : '保存'}
-      </button>
+      <div style={{ ...formRow, alignItems: 'center' }}>
+        <label style={label}>年齢確認（ダミー）</label>
+        <input
+          type="checkbox"
+          checked={ageVerified}
+          onChange={(e) => setAgeVerified(e.target.checked)}
+        />
+        <span style={{ marginLeft: 8, color: '#666' }}>後で本実装予定</span>
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <button style={primaryBtn} onClick={onSave} disabled={saving}>
+          {saving ? '保存中...' : '保存して次へ'}
+        </button>
+      </div>
     </div>
   );
 }
 
-const field: React.CSSProperties = { marginBottom: 14, display: 'grid', gap: 6 };
-const label: React.CSSProperties = { fontWeight: 600 };
+const page: React.CSSProperties = {
+  padding: 16,
+  maxWidth: 560,
+  margin: '0 auto',
+};
+const title: React.CSSProperties = {
+  fontSize: 22,
+  fontWeight: 800,
+  margin: '0 0 16px',
+};
+const formRow: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  marginBottom: 16,
+};
+const label: React.CSSProperties = {
+  fontSize: 14,
+  color: '#475569',
+  fontWeight: 700,
+};
 const input: React.CSSProperties = {
-  padding: '10px 12px',
+  padding: '12px 14px',
   border: '1px solid #e5e7eb',
-  borderRadius: 10,
+  borderRadius: 12,
   fontSize: 16,
 };
 const primaryBtn: React.CSSProperties = {
@@ -102,4 +146,13 @@ const primaryBtn: React.CSSProperties = {
   border: 'none',
   fontWeight: 700,
   cursor: 'pointer',
+  width: '100%',
+};
+const errorBox: React.CSSProperties = {
+  background: '#fee2e2',
+  color: '#991b1b',
+  padding: '8px 12px',
+  borderRadius: 8,
+  marginBottom: 12,
+  fontSize: 14,
 };
