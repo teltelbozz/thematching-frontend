@@ -1,32 +1,53 @@
-import { useNavigate } from 'react-router-dom';
-import { People, Group, Clock, Home, Gear, Help } from '../components/Icons';
+// src/screens/Menu.tsx
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { whenAuthReady } from '../liff';
+import { getProfile } from '../api';
 
-export default function Menu(){
-  const nav = useNavigate();
+export default function Menu() {
+  const [loaded, setLoaded] = useState(false);
+  const [displayName, setDisplayName] = useState<string>('ユーザー');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await whenAuthReady();
+        // 任意：メニューで軽くプロフィール名だけ表示（失敗しても致命的にしない）
+        try {
+          const p = await getProfile().catch(() => null);
+          if (p?.profile?.displayName) setDisplayName(p.profile.displayName);
+        } catch {}
+        setLoaded(true);
+      } catch (e: any) {
+        console.error('[Menu] init failed', e);
+        setError(e?.message ?? 'initialize_failed');
+      }
+    })();
+  }, []);
+
+  if (error) return <div style={{ padding: 16, color: 'red' }}>エラー: {error}</div>;
+  if (!loaded) return <div style={{ padding: 16 }}>読み込み中...</div>;
+
   return (
-    <div className="safe">
-      <div className="menu-title">メニュー</div>
-      <div className="grid6">
-        <button className="tile gold" onClick={()=>nav('/solo')}>
-          <People/><div className="label">一人で合コン</div>
-        </button>
-        <button className="tile gold" onClick={()=>nav('/friends')}>
-          <Group/><div className="label">友達と合コン</div>
-        </button>
-        <button className="tile" onClick={()=>nav('/flow')}>
-          <Clock/><div className="label">合コンの流れ</div>
-        </button>
-        <button className="tile" onClick={()=>nav('/about')}>
-          <Home/><div className="label">サービス概要</div>
-        </button>
-        <button className="tile" onClick={()=>nav('/mypage')}>
-          <Gear/><div className="label">マイページ</div>
-        </button>
-        <button className="tile" onClick={()=>nav('/faq')}>
-          <Help/><div className="label">よくある質問</div>
-        </button>
-      </div>
-      <div className="footer-note">© thematching</div>
+    <div style={{ padding: 16 }}>
+      <h2 style={{ marginBottom: 12 }}>メニュー</h2>
+      <div style={{ marginBottom: 16 }}>こんにちは、{displayName} さん</div>
+      <nav style={{ display: 'grid', gap: 12 }}>
+        <Link to="/profile" style={btnStyle}>プロフィールを編集</Link>
+        <Link to="/setup" style={btnStyle}>合コンの設定</Link>
+      </nav>
     </div>
   );
 }
+
+const btnStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '12px 16px',
+  borderRadius: 12,
+  textDecoration: 'none',
+  background: '#0ea5e9',
+  color: 'white',
+  textAlign: 'center',
+  fontWeight: 600
+};
