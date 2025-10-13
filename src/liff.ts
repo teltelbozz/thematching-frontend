@@ -8,31 +8,27 @@ const API_BASE =
   (import.meta.env.VITE_API_BASE as string);
 
 let _resolveAuthReady: (() => void) | null = null;
-const authReady = new Promise<void>((r) => {
-  _resolveAuthReady = r;
-});
-export function whenAuthReady() {
-  return authReady;
-}
+const authReady = new Promise<void>((r) => (_resolveAuthReady = r));
+export function whenAuthReady() { return authReady; }
 
 // ループ防止用キー（タブ毎）
 const LOGIN_IN_PROGRESS_KEY = 'liff_login_in_progress';
 
-export async function forceReLogin() {
-  try {
-    liff.logout();
-  } catch {}
-  await liff.login({ redirectUri: location.href });
+// ---- Base64URL / JWT ユーティリティ ----
+function b64urlToUtf8(b64url: string): string {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64url.length / 4) * 4, '=');
+  // atob は Latin1 を返すので UTF-8 に復元
+  return decodeURIComponent(escape(atob(b64)));
 }
 
-// --- id_token の事前期限チェック ---
 function parseJwt<T = any>(token: string): T {
-  const [, payload] = token.split('.');
-  // atob結果をUTF-8として復元
-  return JSON.parse(decodeURIComponent(escape(atob(payload))));
+  const parts = token.split('.');
+  if (parts.length < 2) throw new Error('invalid_jwt');
+  return JSON.parse(b64urlToUtf8(parts[1]));
 }
 
-function isIdTokenExpiringOrExpired(idToken: string, skewMs = 30_000) {
+// 期限チェック（デフォ猶予 5 分）
+function isIdTokenExpiringOrExpired(idToken: string, skewMs = 300_000) {
   try {
     const payload = parseJwt<{ exp?: number }>(idToken);
     if (!payload?.exp) return true; // expが無いトークンは無効扱い
@@ -48,24 +44,26 @@ function markLoginStart() {
 function clearLoginMark() {
   sessionStorage.removeItem(LOGIN_IN_PROGRESS_KEY);
 }
-function isLoginLooping(withinMs = 60_000) {
+function isLoginLooping(withinMs = 120_000) {
   const t = Number(sessionStorage.getItem(LOGIN_IN_PROGRESS_KEY) || 0);
   return !!t && Date.now() - t < withinMs;
 }
 
+export async function forceReLogin() {
+  try { liff.logout(); } catch {}
+  markLoginStart();
+  await liff.login({ redirectUri: location.href });
+}
+
+// 期限を見て、必要なら再ログインして新しい id_token を取る
 async function getIdTokenEnsured(): Promise<string> {
   let idt = liff.getIDToken();
 
-  // ない or 期限切れ/切れかけ → 再ログイン
   if (!idt || isIdTokenExpiringOrExpired(idt)) {
-    if (isLoginLooping()) {
-      throw new Error('login_loop_detected'); // 無限遷移の保護
-    }
-    console.log('[liff] idToken missing/stale -> re-login');
-    markLoginStart();
-    await liff.login({ redirectUri: location.href });
-    // ここから先は遷移するので通常は戻ってこないが、
-    // 戻ってきた場合に備えてもう一度取得
+    if (isLoginLooping()) throw new Error('login_loop_detected'); // 無限遷移の保護
+    console.log('[liff] idToken missing/stale -> force re-login');
+    await forceReLogin();
+    // 通常はここに戻らないが、戻ってきた場合に備え再取得
     idt = liff.getIDToken();
     clearLoginMark();
   }
@@ -74,11 +72,20 @@ async function getIdTokenEnsured(): Promise<string> {
   return idt;
 }
 
+// サーバへログイン
 async function serverLogin(idToken: string) {
   if (!API_BASE) throw new Error('missing VITE_API_BASE_URL (or VITE_API_BASE)');
   const url = API_BASE.replace(/\/+$/, '') + '/auth/login';
-  console.log('[api] POST', url);
 
+  // 送信直前に payload をログ（開発用）
+  try {
+    const p: any = parseJwt(idToken);
+    console.log('[liff] id_token exp:', p?.exp, 'iat:', p?.iat, 'now(sec):', Math.floor(Date.now()/1000));
+  } catch (e) {
+    console.warn('[liff] failed to decode id_token before send:', e);
+  }
+
+  console.log('[api] POST', url);
   const r = await fetch(url, {
     method: 'POST',
     credentials: 'include', // refresh cookie を受け取る
@@ -104,7 +111,7 @@ async function serverLogin(idToken: string) {
 export async function initLiff() {
   if (!LIFF_ID) throw new Error('missing VITE_LIFF_ID');
 
-  await liff.init({ liffId: LIFF_ID });
+  await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
   await liff.ready;
 
   if (!liff.isLoggedIn?.()) {
@@ -114,8 +121,7 @@ export async function initLiff() {
       return;
     }
     console.log('[liff] not logged in -> login');
-    markLoginStart();
-    await liff.login({ redirectUri: location.href });
+    await forceReLogin();
     return;
   }
 
