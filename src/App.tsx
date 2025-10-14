@@ -10,47 +10,59 @@ import { getProfile } from './api';
 function BootRouter(){
   const navigate = useNavigate();
   const routedOnce = useRef(false);
-  const [ready, setReady] = useState(false); // whenAuthReady() 解決を待つためのフラグ
+  const [bootLog, setBootLog] = useState<string>('booting…');
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        console.log('[App] calling initLiff');
-        await initLiff();
-      } catch (e) {
-        // ここでは握りつぶす（initLiff 内でログ済み）
-      }
-    })();
-  }, []);
+  const log = (m: string) => {
+    console.log('[Boot]', m);
+    setBootLog(prev => prev + '\n' + m);
+  };
+
+  useEffect(()=>{
+    log('initLiff() call');
+    initLiff().catch(e=>{
+      log('initLiff error: ' + (e?.message || String(e)));
+    });
+  },[]);
 
   useEffect(()=>{
     let cancelled = false;
     (async ()=>{
-      try {
-        await whenAuthReady();   // ← ログイン完了 or 失敗でも resolve される
-      } finally {
-        if (!cancelled) setReady(true);
-      }
-
-      if (cancelled || routedOnce.current) return;
-      routedOnce.current = true;
-
       try{
-        // プロフィールの「未登録判定」は実装に合わせて調整
-        const prof = await getProfile().catch(()=> null);
+        log('waiting whenAuthReady()');
+        await whenAuthReady();
+        if (cancelled) return;
+        setReady(true);
+        log('auth ready');
+
+        if (routedOnce.current) return;
+        routedOnce.current = true;
+
+        log('fetching profile');
+        const prof = await getProfile().catch((e)=>{ log('getProfile failed: '+String(e)); return null; });
         const isRegistered = !!(prof && (prof.name || prof.displayName));
+        log('navigate: ' + (isRegistered ? '/setup' : '/profile'));
         navigate(isRegistered ? '/setup' : '/profile', { replace:true });
-      }catch (e){
-        console.warn('[App] profile check failed, stay on /', e);
-        // 何もしない：メニュー画面に留める
+      }catch(e:any){
+        log('boot flow error: ' + (e?.message || String(e)));
+        // ここでは何もせず、メニュー表示に落とす
       }
     })();
     return ()=>{ cancelled = true; };
   },[navigate]);
 
-  // whenAuthReady() 待ちの間は最低限のローディングを表示（真っ暗回避）
-  if (!ready) {
-    return <div style={{padding:'24px', fontSize:16}}>初期化中です…</div>;
+  // フォールバック：auth 完了までメニューでなく「起動中」を見せる
+  if (!ready){
+    return (
+      <div style={{padding:'16px', fontFamily:'system-ui, sans-serif', color:'#ddd', background:'#111', minHeight:'100vh'}}>
+        <h2>起動中…</h2>
+        <pre style={{whiteSpace:'pre-wrap', fontSize:12, lineHeight:1.5, color:'#aaa'}}>{bootLog}</pre>
+        <div style={{marginTop:8, fontSize:12, color:'#888'}}>
+          __liffInitError: {(window as any).__liffInitError ?? '(none)'}<br/>
+          __bootFatal: {(window as any).__bootFatal ?? '(none)'}
+        </div>
+      </div>
+    );
   }
 
   return (
