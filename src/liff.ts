@@ -75,20 +75,30 @@ function clearLoginMark() {
 }
 function isLoginLooping(withinMs = 60_000) {
   const t = Number(sessionStorage.getItem(LOGIN_IN_PROGRESS_KEY) || 0);
-  return !!t && Date.now() - t < withinMs;
+  const looping = !!t && Date.now() - t < withinMs;
+  if (looping) console.warn('[liff.ts] possible login loop detected (within', withinMs, 'ms)');
+  return looping;
 }
 
 async function getIdTokenEnsured(liff: any): Promise<string> {
   let idt = liff.getIDToken?.();
 
   if (!idt || isIdTokenExpiringOrExpired(idt)) {
-    if (isLoginLooping()) throw new Error('login_loop_detected');
     console.log('[liff.ts] idToken missing/stale → re-login');
     markLoginStart();
-    await liff.login({ redirectUri: location.href });
+
+    // ←★ 修正：ループ検知しても abort せず、ログだけ出して一度だけ再ログイン
+    try {
+      await liff.login({ redirectUri: location.href });
+    } catch (e) {
+      console.warn('[liff.ts] login redirect skipped or failed', e);
+    }
+
     idt = liff.getIDToken?.();
-    clearLoginMark();
   }
+
+  clearLoginMark(); // ←★ 成功/失敗にかかわらず必ず mark をクリア
+
   if (!idt) throw new Error('failed_to_get_id_token');
   return idt;
 }
