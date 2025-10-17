@@ -1,6 +1,8 @@
 // src/liff.ts
-/* eslint-disable no-console */
 import { setAccessToken } from './api';
+
+// liff は動的 import（初期化失敗時もコンソールに出るように）
+const loadLiff = () => import('@line/liff');
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
 const API_BASE =
@@ -9,158 +11,124 @@ const API_BASE =
 
 let _resolveAuthReady: (() => void) | null = null;
 const authReady = new Promise<void>((r) => (_resolveAuthReady = r));
-export function whenAuthReady() { return authReady; }
-
-const LOGIN_IN_PROGRESS_KEY = 'liff_login_in_progress';
-
-// ---- debug dump (最初に出す) ----
-(function debugBoot() {
-  const mask = (s?: string) => (s ? s.slice(0, 3) + '***' + s.slice(-3) : s);
-  console.log('[liff.ts] boot',
-    { LIFF_ID: mask(LIFF_ID), API_BASE: API_BASE || '(missing)' });
-})();
-
-export async function forceReLogin() {
-  try { (window as any).liff?.logout?.(); } catch {}
-  location.href = `https://liff.line.me/${LIFF_ID}?redirect=${encodeURIComponent(location.href)}`;
+export function whenAuthReady() {
+  return authReady;
 }
 
-// ---- SDK ローダ（モジュール → グローバルの順に試す）----
-async function loadLiff(): Promise<any> {
-  try {
-    const mod = await import(/* @vite-ignore */ '@line/liff');
-    // 一部ビルド環境で default じゃない事があるため両対応
-    const liff = (mod as any).default ?? (mod as any);
-    if (liff?.init) {
-      console.log('[liff.ts] got liff from module');
-      (window as any).__liffSource = 'module';
-      return liff;
-    }
-    throw new Error('module_loaded_but_invalid');
-  } catch (e) {
-    console.warn('[liff.ts] module import failed, fallback to global SDK', e);
-    // グローバル SDK を読み込み
-    await new Promise<void>((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
-      s.async = true;
-      s.onload = () => res();
-      s.onerror = () => rej(new Error('global_sdk_load_failed'));
-      document.head.appendChild(s);
-    });
-    const liff = (window as any).liff;
-    if (!liff?.init) throw new Error('global_sdk_missing_init');
-    console.log('[liff.ts] got liff from global');
-    (window as any).__liffSource = 'global';
-    return liff;
-  }
-}
+// ---- ループ対策フラグ（タブ単位） ----
+const KEY_LOGIN_STARTED_AT = 'liff_login_started_at';
+const KEY_LOGIN_DONE = 'liff_login_done'; // サーバーへの login 成功フラグ
+const LOGIN_LOOP_WINDOW_MS = 5 * 60_000;  // 5分
 
-function parseJwt<T = any>(token: string): T {
-  const [, payload] = token.split('.');
-  return JSON.parse(decodeURIComponent(escape(atob(payload))));
-}
-function isIdTokenExpiringOrExpired(idToken: string, skewMs = 30_000) {
-  try {
-    const payload = parseJwt<{ exp?: number }>(idToken);
-    if (!payload?.exp) return true;
-    return payload.exp * 1000 < Date.now() + skewMs;
-  } catch { return true; }
-}
 function markLoginStart() {
-  sessionStorage.setItem(LOGIN_IN_PROGRESS_KEY, String(Date.now()));
+  sessionStorage.setItem(KEY_LOGIN_STARTED_AT, String(Date.now()));
 }
-function clearLoginMark() {
-  sessionStorage.removeItem(LOGIN_IN_PROGRESS_KEY);
+function clearLoginStart() {
+  sessionStorage.removeItem(KEY_LOGIN_STARTED_AT);
 }
-function isLoginLooping(withinMs = 60_000) {
-  const t = Number(sessionStorage.getItem(LOGIN_IN_PROGRESS_KEY) || 0);
-  const looping = !!t && Date.now() - t < withinMs;
-  if (looping) console.warn('[liff.ts] possible login loop detected (within', withinMs, 'ms)');
-  return looping;
+function wasLoginJustStarted(withinMs = LOGIN_LOOP_WINDOW_MS) {
+  const t = Number(sessionStorage.getItem(KEY_LOGIN_STARTED_AT) || 0);
+  return !!t && Date.now() - t < withinMs;
+}
+function markLoginDone() {
+  sessionStorage.setItem(KEY_LOGIN_DONE, '1');
+}
+function isLoginDone() {
+  return sessionStorage.getItem(KEY_LOGIN_DONE) === '1';
 }
 
-async function getIdTokenEnsured(liff: any): Promise<string> {
-  let idt = liff.getIDToken?.();
-
-  if (!idt || isIdTokenExpiringOrExpired(idt)) {
-    console.log('[liff.ts] idToken missing/stale → re-login');
-    markLoginStart();
-
-    // ←★ 修正：ループ検知しても abort せず、ログだけ出して一度だけ再ログイン
-    try {
-      await liff.login({ redirectUri: location.href });
-    } catch (e) {
-      console.warn('[liff.ts] login redirect skipped or failed', e);
-    }
-
-    idt = liff.getIDToken?.();
-  }
-
-  clearLoginMark(); // ←★ 成功/失敗にかかわらず必ず mark をクリア
-
-  if (!idt) throw new Error('failed_to_get_id_token');
-  return idt;
+function assertEnv() {
+  if (!LIFF_ID) throw new Error('missing VITE_LIFF_ID');
+  if (!API_BASE) throw new Error('missing VITE_API_BASE_URL (or VITE_API_BASE)');
 }
 
 async function serverLogin(idToken: string) {
-  if (!API_BASE) throw new Error('missing VITE_API_BASE_URL (or VITE_API_BASE)');
   const url = API_BASE.replace(/\/+$/, '') + '/auth/login';
-  console.log('[liff.ts] POST', url);
+  console.log('[liff] POST', url);
 
   const r = await fetch(url, {
     method: 'POST',
-    credentials: 'include',
+    credentials: 'include', // refresh cookie を受け取る
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id_token: idToken }),
   });
 
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    console.error('[liff.ts] login failed:', r.status, t);
+    console.error('[liff] login failed:', r.status, t);
     throw new Error(`login_failed:${r.status}`);
   }
 
-  const json = await r.json().catch(() => ({}));
+  const json = (await r.json().catch(() => ({}))) as any;
   const at: string | undefined = json?.accessToken ?? json?.access_token;
   if (!at) throw new Error('no_access_token_from_server');
 
   setAccessToken(at);
-  console.log('[liff.ts] got access token');
+  markLoginDone();
+  console.log('[liff] login success & access token set');
 }
 
+/**
+ * 可能な限り re-login を避ける版：
+ * - 「ログインしていない」時だけ liff.login() を呼ぶ
+ * - id_token の鮮度チェックは行わない（LINE 側で有効な値を返す前提）
+ * - 直前に login を開始していたら、ループ保護で止める
+ */
 export async function initLiff() {
   try {
-    if (!LIFF_ID) throw new Error('missing VITE_LIFF_ID');
+    assertEnv();
+    console.log('[liff] boot', { href: location.href });
 
-    const liff = await loadLiff();
+    const { default: liff } = await loadLiff();
+    console.log('[liff] got liff from module');
 
     await liff.init({ liffId: LIFF_ID });
     await liff.ready;
-    console.log('[liff.ts] ready, loggedIn=', liff.isLoggedIn?.());
 
-    if (!liff.isLoggedIn?.()) {
-      if (isLoginLooping()) {
-        console.error('[liff.ts] login loop detected — abort this cycle.');
+    const loggedIn = typeof liff.isLoggedIn === 'function' ? liff.isLoggedIn() : false;
+    console.log('[liff] ready, loggedIn=', loggedIn);
+
+    // すでにこのタブでサーバー login 済みなら、何もしない
+    if (isLoginDone()) {
+      console.log('[liff] already server-logged-in in this tab → skip login flow');
+      _resolveAuthReady?.();
+      return;
+    }
+
+    // ログインしていない → 一度だけ login を発火
+    if (!loggedIn) {
+      if (wasLoginJustStarted()) {
+        console.error('[liff] login loop detected. aborting this cycle.');
+        return; // ここで止める（ユーザー操作 or 別タブで再試行）
+      }
+      console.log('[liff] not logged in → call liff.login()');
+      markLoginStart();
+      await liff.login({ redirectUri: location.href });
+      return; // ここから先は基本戻らない
+    }
+
+    // ここに来るのは「LINEログインは済んでいるが、サーバー未ログイン」のケース
+    // idToken をそのまま使う（鮮度チェックは行わない）
+    const idToken = liff.getIDToken();
+    console.log('[liff] idToken exists?', !!idToken);
+    if (!idToken) {
+      // 通常ここには来ないが、念のためループ保護
+      if (wasLoginJustStarted()) {
+        console.error('[liff] login loop detected without idToken. aborting.');
         return;
       }
-      console.log('[liff.ts] not logged in → login');
+      console.log('[liff] no idToken → liff.login()');
       markLoginStart();
       await liff.login({ redirectUri: location.href });
       return;
     }
 
-    console.log('[liff.ts] idToken exists?', !!liff.getIDToken?.());
-    const idt = await getIdTokenEnsured(liff);
-    console.log('[liff.ts] idToken len=', idt.length);
-
-    await serverLogin(idt);
-
-    clearLoginMark();
+    await serverLogin(idToken);
+    clearLoginStart();
     _resolveAuthReady?.();
-  } catch (err) {
-    (window as any).__liffInitError = String(err && (err as any).message || err);
-    console.error('[liff.ts] init failed:', err);
-    // ここは UI を止めたいだけなので throw しない
+  } catch (e) {
+    console.error('[liff] init failed:', e);
+    // 失敗しても resolve して画面を固まらせない（/profile 等は API 失敗表示になるだけ）
+    _resolveAuthReady?.();
   }
 }
