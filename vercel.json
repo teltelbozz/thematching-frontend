@@ -1,8 +1,19 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://thematching-backend.vercel.app/api/:path*" }
+    {
+      "source": "/api/(.*)",
+      "destination": "https://thematching-backend.vercel.app/api/$1"
+    }
   ],
   "headers": [
-    { "source": "/api/:path*", "headers": [{ "key": "Access-Control-Allow-Credentials", "value": "true" }] }
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://thematching-frontend.vercel.app" },
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    }
   ]
 }
