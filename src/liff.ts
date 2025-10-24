@@ -76,6 +76,7 @@ export async function initLiff() {
 
     // id_token の鮮度確認（exp が近い/切れてる → 再ログイン）
     let idt = liff.getIDToken();
+    console.log('[DEBUG] id_token =', idt);
     if (!idt || isIdTokenExpiringOrExpired(idt)) {
       if (looping()) {
         console.warn('[liff] login loop detected (stale id_token). resolve anyway.');
