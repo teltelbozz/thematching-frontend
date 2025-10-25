@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { initLiff, whenAuthReady } from './liff';
-import { getProfile } from './api';
+import { getAccessToken } from './api';
 import ProfileSetup from './screens/Profile';
 import Home from './screens/Home';
 
@@ -28,12 +28,24 @@ function BootRouter() {
       routedOnce.current = true;
 
       try {
-        // プロフィール取得
-        const r = await getProfile(); // { profile: {...} } を想定
-        const p = r?.profile || {};
-        // 「未登録判定」：ニックネームが空なら登録画面へ
-        const isRegistered = !!p.nickname;
-        navigate(isRegistered ? '/' : '/profile', { replace: true });
+        // /api/me でプロフィール登録済みかを判定
+        const token = getAccessToken();
+        if (!token) {
+          // 念のための保険（通常は whenAuthReady 済みなので入っている想定）
+          navigate('/profile', { replace: true });
+          return;
+        }
+
+        const base = import.meta.env.VITE_API_BASE_URL as string;
+        const res = await fetch(`${base}/me`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error(`/me failed: ${res.status}`);
+        const j = await res.json(); // { userId, hasProfile }
+
+        navigate(j?.hasProfile ? '/' : '/profile', { replace: true });
       } catch (e) {
         // 失敗してもループはしない。とりあえずプロフィールへ誘導。
         console.warn('[boot] getProfile failed, go /profile', e);
