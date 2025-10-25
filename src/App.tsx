@@ -2,49 +2,60 @@
 import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { initLiff, whenAuthReady } from './liff';
-import Menu from './screens/Menu';
-import Profile from './screens/Profile';
-import Setup from './screens/Setup';
 import { getProfile } from './api';
+import ProfileSetup from './screens/ProfileSetup';
+import Home from './screens/Home';
 
-function BootRouter(){
+function BootRouter() {
   const navigate = useNavigate();
   const routedOnce = useRef(false);
 
-  useEffect(()=>{ initLiff(); },[]);
+  useEffect(() => {
+    // LIFF 初期化は一度だけ
+    initLiff().catch((e) => {
+      console.error('[boot] initLiff error', e);
+      // 起動エラーでも一旦ホームは見せる
+      navigate('/', { replace: true });
+    });
+  }, [navigate]);
 
-  useEffect(()=>{
+  useEffect(() => {
     let cancelled = false;
-    (async ()=>{
-      await whenAuthReady();
+    (async () => {
+      await whenAuthReady(); // ← ログイン完了（サーバーの /auth/login まで終了）を待つ
+
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
 
-      try{
-        const { profile } = await getProfile().catch(()=> ({ profile:null }));
-        const isRegistered = !!(profile && (profile.nickname || profile.displayName || profile.name));
-        navigate(isRegistered ? '/setup' : '/profile', { replace:true });
-      }catch{
-        // 失敗してもループさせない
+      try {
+        // プロフィール取得
+        const r = await getProfile(); // { profile: {...} } を想定
+        const p = r?.profile || {};
+        // 「未登録判定」：ニックネームが空なら登録画面へ
+        const isRegistered = !!p.nickname;
+        navigate(isRegistered ? '/' : '/profile', { replace: true });
+      } catch (e) {
+        // 失敗してもループはしない。とりあえずプロフィールへ誘導。
+        console.warn('[boot] getProfile failed, go /profile', e);
+        navigate('/profile', { replace: true });
       }
     })();
-    return ()=>{ cancelled = true; };
-  },[navigate]);
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   return (
     <Routes>
-      <Route path="/" element={<Menu />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/setup" element={<Setup />} />
-      <Route path="*" element={<Menu />} />
+      <Route path="/" element={<Home />} />
+      <Route path="/profile" element={<ProfileSetup />} />
+      <Route path="*" element={<Home />} />
     </Routes>
   );
 }
 
-export default function App(){
+export default function App() {
   return (
     <BrowserRouter>
-      <BootRouter/>
+      <BootRouter />
     </BrowserRouter>
   );
 }

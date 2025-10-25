@@ -2,157 +2,143 @@
 import { useEffect, useState } from 'react';
 import { whenAuthReady } from '../liff';
 import { getProfile, saveProfile } from '../api';
-import { useNavigate } from 'react-router-dom';
 
-type ProfileData = {
-  profile?: {
-    displayName?: string;
-    picture?: string;
-    ageVerified?: boolean;
-  };
-};
+type Gender = 'male' | 'female' | 'other';
 
-export default function Profile() {
-  const nav = useNavigate();
-  const [loaded, setLoaded] = useState(false);
+export default function ProfileSetup() {
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [displayName, setDisplayName] = useState<string>('');
-  const [picture, setPicture] = useState<string>('');
-  const [ageVerified, setAgeVerified] = useState<boolean>(false);
+  // form state
+  const [nickname, setNickname] = useState('');
+  const [age, setAge] = useState<number | ''>('');
+  const [gender, setGender] = useState<Gender | ''>('');
+  const [occupation, setOccupation] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
+        // サーバーログイン完了を待つ（重要）
         await whenAuthReady();
-        const data = (await getProfile()) as ProfileData;
-        setDisplayName(data?.profile?.displayName ?? '');
-        setPicture(data?.profile?.picture ?? '');
-        setAgeVerified(Boolean(data?.profile?.ageVerified));
+
+        const r = await getProfile(); // { profile: {...} }
+        if (!cancelled) {
+          const p = r?.profile || {};
+          setNickname(p.nickname ?? '');
+          setAge(p.age ?? '');
+          setGender((p.gender as Gender) ?? '');
+          setOccupation(p.occupation ?? '');
+        }
       } catch (e: any) {
-        setErr(e?.message ?? 'プロフィール取得に失敗しました');
+        if (!cancelled) setError(e?.message || String(e));
       } finally {
-        setLoaded(true);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
-  async function onSave() {
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
     try {
-      setSaving(true);
-      setErr(null);
       await saveProfile({
-        profile: {
-          displayName: displayName || 'ユーザー',
-          picture: picture || undefined,
-          ageVerified,
-        },
+        nickname: nickname || null,
+        age: age === '' ? null : age,
+        gender: gender || null,
+        occupation: occupation || null,
       });
-      // 保存後は合コン設定へ遷移
-      nav('/setup', { replace: true });
+      // 保存後の遷移は App.tsx 側の BootRouter に任せる運用でもOKだが、
+      // ここで明示的にホームへ戻すのもアリ
+      location.replace('/');
     } catch (e: any) {
-      setErr(e?.message ?? 'プロフィール保存に失敗しました');
+      setError(e?.message || '保存に失敗しました');
     } finally {
       setSaving(false);
     }
   }
 
-  if (!loaded) {
-    return (
-      <div style={page}>
-        <h1 style={title}>プロフィール</h1>
-        <p>読み込み中...</p>
-      </div>
-    );
-  }
+  if (loading) return <div style={{ padding: 16 }}>プロフィールを読み込み中…</div>;
 
   return (
-    <div style={page}>
-      <h1 style={title}>プロフィール</h1>
-      {err && <p style={errorBox}>{err}</p>}
+    <div style={{ padding: 16, maxWidth: 520 }}>
+      <h1>プロフィール登録</h1>
+      <p>まずは基本情報を登録しましょう。</p>
 
-      <div style={formRow}>
-        <label style={label}>表示名</label>
-        <input
-          style={input}
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="ニックネーム"
-        />
-      </div>
+      {error && (
+        <div style={{ background: '#fee', padding: 8, borderRadius: 6, margin: '12px 0' }}>
+          エラー: {error}
+        </div>
+      )}
 
-      <div style={formRow}>
-        <label style={label}>写真URL（任意）</label>
-        <input
-          style={input}
-          value={picture}
-          onChange={(e) => setPicture(e.target.value)}
-          placeholder="https://..."
-        />
-      </div>
+      <form onSubmit={onSubmit}>
+        <div style={{ margin: '12px 0' }}>
+          <label>
+            ニックネーム（必須）<br />
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              required
+              placeholder="テスト太郎"
+              style={{ width: '100%', padding: 8 }}
+            />
+          </label>
+        </div>
 
-      <div style={{ ...formRow, alignItems: 'center' }}>
-        <label style={label}>年齢確認（ダミー）</label>
-        <input
-          type="checkbox"
-          checked={ageVerified}
-          onChange={(e) => setAgeVerified(e.target.checked)}
-        />
-        <span style={{ marginLeft: 8, color: '#666' }}>後で本実装予定</span>
-      </div>
+        <div style={{ margin: '12px 0' }}>
+          <label>
+            年齢<br />
+            <input
+              type="number"
+              min={18}
+              max={120}
+              value={age}
+              onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
+              placeholder="28"
+              style={{ width: '100%', padding: 8 }}
+            />
+          </label>
+        </div>
 
-      <div style={{ marginTop: 24 }}>
-        <button style={primaryBtn} onClick={onSave} disabled={saving}>
-          {saving ? '保存中...' : '保存して次へ'}
+        <div style={{ margin: '12px 0' }}>
+          <label>
+            性別<br />
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value as Gender)}
+              style={{ width: '100%', padding: 8 }}
+            >
+              <option value="">選択なし</option>
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ margin: '12px 0' }}>
+          <label>
+            職業<br />
+            <input
+              value={occupation}
+              onChange={(e) => setOccupation(e.target.value)}
+              placeholder="engineer"
+              style={{ width: '100%', padding: 8 }}
+            />
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          disabled={saving || !nickname}
+          style={{ padding: '10px 16px' }}
+        >
+          {saving ? '保存中…' : '保存してはじめる'}
         </button>
-      </div>
+      </form>
     </div>
   );
 }
-
-const page: React.CSSProperties = {
-  padding: 16,
-  maxWidth: 560,
-  margin: '0 auto',
-};
-const title: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 800,
-  margin: '0 0 16px',
-};
-const formRow: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-  marginBottom: 16,
-};
-const label: React.CSSProperties = {
-  fontSize: 14,
-  color: '#475569',
-  fontWeight: 700,
-};
-const input: React.CSSProperties = {
-  padding: '12px 14px',
-  border: '1px solid #e5e7eb',
-  borderRadius: 12,
-  fontSize: 16,
-};
-const primaryBtn: React.CSSProperties = {
-  padding: '12px 16px',
-  borderRadius: 12,
-  background: '#0ea5e9',
-  color: '#fff',
-  border: 'none',
-  fontWeight: 700,
-  cursor: 'pointer',
-  width: '100%',
-};
-const errorBox: React.CSSProperties = {
-  background: '#fee2e2',
-  color: '#991b1b',
-  padding: '8px 12px',
-  borderRadius: 8,
-  marginBottom: 12,
-  fontSize: 14,
-};
