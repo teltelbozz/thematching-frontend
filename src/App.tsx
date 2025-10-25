@@ -27,7 +27,7 @@ function BootRouter() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await whenAuthReady(); // ← ログイン完了（サーバーの /auth/login まで終了）を待つ
+      await whenAuthReady(); // サーバーの /auth/login まで終了を待つ
 
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
@@ -50,26 +50,40 @@ function BootRouter() {
         if (!res.ok) throw new Error(`/me failed: ${res.status}`);
         const j = await res.json(); // { userId, hasProfile }
 
-        navigate(j?.hasProfile ? '/' : '/profile', { replace: true });
+        // "?r=/xxx" を拾う（例: https://.../?r=%2Fmypage）
+        const params = new URLSearchParams(window.location.search);
+        const requested = params.get('r');
+        const requestedPath =
+          requested && requested.startsWith('/') ? requested : '/';
+
+        if (!j?.hasProfile) {
+          navigate('/profile', { replace: true });
+          return;
+        }
+
+        // 登録済みなら r があれば r へ、無ければホームへ
+        navigate(requestedPath, { replace: true });
       } catch (e) {
         // 失敗してもループはしない。とりあえずプロフィールへ誘導。
-        console.warn('[boot] getProfile failed, go /profile', e);
+        console.warn('[boot] me check failed, go /profile', e);
         navigate('/profile', { replace: true });
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/profile" element={<ProfileSetup />} />
-      <Route path="*" element={<Home />} />
       <Route path="/mypage" element={<MyPage />} />
       <Route path="/mypage/preferences" element={<Preferences />} />
       <Route path="/mypage/faq" element={<Faq />} />
       <Route path="/mypage/invite" element={<Invite />} />
       <Route path="/mypage/account" element={<Account />} />
+      <Route path="*" element={<Home />} />
     </Routes>
   );
 }
