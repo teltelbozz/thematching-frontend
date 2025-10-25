@@ -5,10 +5,6 @@ import { initLiff, whenAuthReady } from './liff';
 import { getAccessToken } from './api';
 import ProfileSetup from './screens/Profile';
 import Home from './screens/Home';
-import Flow from './screens/Flow';
-import About from './screens/About';
-import Faq from './screens/Faq';
-
 
 function BootRouter() {
   const navigate = useNavigate();
@@ -64,9 +60,6 @@ function BootRouter() {
       <Route path="/" element={<Home />} />
       <Route path="/profile" element={<ProfileSetup />} />
       <Route path="*" element={<Home />} />
-      <Route path="/flow" element={<Flow />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/faq" element={<Faq />} />
     </Routes>
   );
 }
