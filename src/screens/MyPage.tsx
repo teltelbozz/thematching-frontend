@@ -1,14 +1,32 @@
+// src/screens/MyPage.tsx
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import './MyPage.css';
 import { getProfile } from '../api';
 
 type Profile = {
-  id: number | string;
+  id?: string | number;
   nickname?: string | null;
   age?: number | null;
   occupation?: string | null;
   photo_url?: string | null;
 };
+
+function ChevronRight() {
+  return (
+    <svg className="mp-chevron" viewBox="0 0 24 24" aria-hidden>
+      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg className="mp-back" viewBox="0 0 24 24" aria-hidden>
+      <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
 
 export default function MyPage() {
   const nav = useNavigate();
@@ -19,76 +37,88 @@ export default function MyPage() {
     (async () => {
       try {
         const r = await getProfile(); // { profile: {...} }
-        const p = r?.profile as Profile | undefined;
-        if (!p) throw new Error('no_profile');
-        // ガード：ニックネーム未設定ならセットアップへ
-        if (!p.nickname) return nav('/profile', { replace: true });
-        setProfile(p);
+        setProfile(r?.profile ?? null);
       } catch (e) {
         console.warn('[mypage] getProfile failed', e);
-        nav('/profile', { replace: true });
       } finally {
         setLoading(false);
       }
     })();
-  }, [nav]);
+  }, []);
 
-  if (loading) {
-    return <div className="p-6 text-gray-500">読み込み中…</div>;
-  }
-  if (!profile) return null;
+  const ageTxt = profile?.age ? `${profile.age}歳` : '';
+  const occTxt = profile?.occupation ?? '';
+  const nameTxt = profile?.nickname ?? '';
+  const subtitle = [ageTxt, occTxt].filter(Boolean).join('　');
 
   return (
-    <div className="max-w-screen-sm mx-auto">
-      {/* Header */}
-      <div className="px-4 py-3 border-b">
-        <h1 className="text-xl font-semibold">マイページ</h1>
-      </div>
+    <div className="mp-root">
+      {/* LIFF の上部バー下に余白 */}
+      <div className="mp-safe" />
 
-      {/* Card: 顔写真 + 基本 */}
-      <div className="px-4 py-4 flex items-center gap-4">
-        <Avatar url={profile.photo_url} name={profile.nickname || ''} />
-        <div className="flex-1">
-          <div className="text-lg font-medium">
-            {profile.age ? `${profile.age}歳 ` : ''}{profile.nickname}
-          </div>
-          <div className="text-sm text-gray-500">
-            {profile.occupation || '—'}
-          </div>
-          <Link to="/profile" className="text-blue-600 text-sm underline mt-1 inline-block">
-            プロフィールを編集 &gt;
-          </Link>
+      {/* ヘッダ */}
+      <header className="mp-header">
+        <button className="mp-iconbtn" onClick={() => nav(-1)} aria-label="戻る">
+          <BackIcon />
+        </button>
+        <div className="mp-titleWrap">
+          <div className="mp-title">マイページ</div>
+          <div className="mp-subtitle">https://the4app.net</div>
         </div>
-      </div>
+        <div className="mp-rightspace" />
+      </header>
 
-      {/* Menu list */}
-      <nav className="mt-2 divide-y bg-white">
-        <MenuItem to="/mypage/preferences" label="希望条件変更" />
-        <MenuItem to="/mypage/faq"         label="よくある質問" />
-        <MenuItem to="/mypage/invite"      label="招待して合コンチケットをGET" />
-        <MenuItem to="/mypage/account"     label="アカウント" />
-      </nav>
+      {/* 本文 */}
+      <main className="mp-main">
+        {/* プロフィールカード */}
+        <section className="mp-card mp-profileCard" onClick={() => nav('/profile')}>
+          <div className="mp-avatarWrap">
+            <img
+              className="mp-avatar"
+              src={
+                profile?.photo_url ||
+                'https://placehold.co/120x120?text=%20' // フォールバック
+              }
+              alt=""
+            />
+          </div>
+          <div className="mp-profileText">
+            <div className="mp-name">{nameTxt || (loading ? '読み込み中…' : '—')}</div>
+            <div className="mp-mini">{subtitle || 'プロフィールを設定しましょう'}</div>
+            <div className="mp-editLink">プロフィールを編集</div>
+          </div>
+          <ChevronRight />
+        </section>
+
+        {/* メニューリスト */}
+        <nav className="mp-list">
+          <button className="mp-item" onClick={() => nav('/mypage/preferences')}>
+            <span className="mp-ico">📝</span>
+            <span className="mp-label">希望条件変更</span>
+            <ChevronRight />
+          </button>
+
+          <button className="mp-item" onClick={() => nav('/mypage/faq')}>
+            <span className="mp-ico">❓</span>
+            <span className="mp-label">よくある質問</span>
+            <ChevronRight />
+          </button>
+
+          <button className="mp-item" onClick={() => nav('/mypage/invite')}>
+            <span className="mp-ico">👥</span>
+            <span className="mp-label">招待して合コンチケットをGET</span>
+            <ChevronRight />
+          </button>
+
+          <button className="mp-item" onClick={() => nav('/mypage/account')}>
+            <span className="mp-ico">⚙️</span>
+            <span className="mp-label">アカウント</span>
+            <ChevronRight />
+          </button>
+        </nav>
+
+        <div className="mp-bottomPad" />
+      </main>
     </div>
-  );
-}
-
-function Avatar({ url, name }: { url?: string | null; name: string }) {
-  if (url) {
-    return <img src={url} alt="avatar" className="w-16 h-16 rounded-full object-cover" />;
-  }
-  const initial = (name || '？').slice(0, 1);
-  return (
-    <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-xl">
-      {initial}
-    </div>
-  );
-}
-
-function MenuItem({ to, label }: { to: string; label: string }) {
-  return (
-    <Link to={to} className="flex items-center justify-between px-4 py-4 hover:bg-gray-50">
-      <span className="text-base">{label}</span>
-      <span className="text-gray-400">›</span>
-    </Link>
   );
 }
