@@ -5,6 +5,11 @@ import { initLiff, whenAuthReady } from './liff';
 import { getAccessToken } from './api';
 import ProfileSetup from './screens/Profile';
 import Home from './screens/Home';
+import MyPage from './screens/MyPage';
+import Preferences from './screens/Preferences';
+import Faq from './screens/Faq';
+import Invite from './screens/Invite';
+import Account from './screens/Account';
 
 function BootRouter() {
   const navigate = useNavigate();
@@ -60,6 +65,11 @@ function BootRouter() {
       <Route path="/" element={<Home />} />
       <Route path="/profile" element={<ProfileSetup />} />
       <Route path="*" element={<Home />} />
+      <Route path="/mypage" element={<MyPage />} />
+      <Route path="/mypage/preferences" element={<Preferences />} />
+      <Route path="/mypage/faq" element={<Faq />} />
+      <Route path="/mypage/invite" element={<Invite />} />
+      <Route path="/mypage/account" element={<Account />} />
     </Routes>
   );
 }
