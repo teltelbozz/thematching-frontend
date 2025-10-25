@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { initLiff, whenAuthReady } from './liff';
 import { getProfile } from './api';
-import ProfileSetup from './screens/ProfileSetup';
+import ProfileSetup from './screens/Profile';
 import Home from './screens/Home';
 
 function BootRouter() {
