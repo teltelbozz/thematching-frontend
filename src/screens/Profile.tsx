@@ -1,214 +1,251 @@
-// src/routes/profile.ts
-import { Router } from 'express';
-import type { Pool } from 'pg';
-import { readBearer, verifyAccess } from '../auth/tokenService';
+// src/screens/Profile.tsx
+import { useEffect, useState } from 'react';
+import { getProfile, saveProfile } from '../api';
 
-const router = Router();
+type Profile = {
+  nickname?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  occupation?: string | null;
+  education?: string | null;
+  university?: string | null;
+  hometown?: string | null;
+  residence?: string | null;
+  personality?: string | null;
+  income?: number | null;
+  atmosphere?: string | null;
+};
 
-function normalizeClaims(v: any): any {
-  // verifyAccess の戻りが { payload } / あるいは payload そのもの どちらでも対応
-  if (v && typeof v === 'object' && 'payload' in v) return (v as any).payload;
-  return v;
-}
+export default function ProfileScreen() {
+  const [form, setForm] = useState<Profile>({
+    nickname: '',
+    age: undefined,
+    gender: '',
+    occupation: '',
+    education: '',
+    university: '',
+    hometown: '',
+    residence: '',
+    personality: '',
+    income: undefined,
+    atmosphere: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-function normalizeUidNumber(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
-  return null;
-}
-
-/**
- * アクセストークン内 claims の uid が:
- *  - 数値 … そのまま返す
- *  - 文字列（LINEの sub 想定 = "U..."）… users.line_user_id から id を解決
- *    - 見つからなければ INSERT して id を払い出す（フォールバック）
- */
-async function resolveUserIdFromClaims(claims: any, db: Pool): Promise<number | null> {
-  const raw = claims?.uid;
-
-  // 1) すでに数値ならそのまま
-  const asNum = normalizeUidNumber(raw);
-  if (asNum != null) return asNum;
-
-  // 2) 文字列（LINE sub 想定）なら DB で解決
-  if (typeof raw === 'string' && raw.trim()) {
-    const sub = raw.trim();
-    // 既存ユーザー検索
-    const r1 = await db.query<{ id: number }>(
-      'SELECT id FROM users WHERE line_user_id = $1 LIMIT 1',
-      [sub],
-    );
-    if (r1.rows[0]) return r1.rows[0].id;
-
-    // なければ作成（最小カラムで作成）
-    const r2 = await db.query<{ id: number }>(
-      'INSERT INTO users (line_user_id) VALUES ($1) RETURNING id',
-      [sub],
-    );
-    return r2.rows[0]?.id ?? null;
-  }
-
-  return null;
-}
-
-// GET /api/profile  …自分のプロフィール取得
-router.get('/', async (req, res) => {
-  try {
-    const token = readBearer(req);
-    if (!token) return res.status(401).json({ error: 'unauthenticated' });
-
-    const verified = await verifyAccess(token);
-    const claims = normalizeClaims(verified);
-
-    const db = req.app.locals.db as Pool | undefined;
-    if (!db) {
-      console.error('[profile:get] db_not_initialized');
-      return res.status(500).json({ error: 'server_error' });
-    }
-
-    const uid = await resolveUserIdFromClaims(claims, db);
-    if (uid == null) return res.status(401).json({ error: 'unauthenticated' });
-
-    const r = await db.query(
-      `SELECT u.id, u.line_user_id, u.payment_method_set,
-              p.nickname, p.age, p.gender, p.occupation,
-              p.education, p.university, p.hometown, p.residence,
-              p.personality, p.income, p.atmosphere,
-              p.photo_url, p.photo_masked_url, p.verified_age
-         FROM users u
-    LEFT JOIN user_profiles p ON p.user_id = u.id
-        WHERE u.id = $1`,
-      [uid],
-    );
-
-    // まだ未登録でも 200 で id だけ返す
-    if (!r.rows[0]) return res.json({ profile: { id: uid } });
-    return res.json({ profile: r.rows[0] });
-  } catch (e: any) {
-    console.error('[profile:get]', e?.message || e);
-    return res.status(500).json({ error: 'server_error' });
-  }
-});
-
-// PUT /api/profile  …自分のプロフィール作成/更新（upsert）
-router.put('/', async (req, res) => {
-  try {
-    const token = readBearer(req);
-    if (!token) return res.status(401).json({ error: 'unauthenticated' });
-
-    const verified = await verifyAccess(token);
-    const claims = normalizeClaims(verified);
-
-    const db = req.app.locals.db as Pool | undefined;
-    if (!db) {
-      console.error('[profile:put] db_not_initialized');
-      return res.status(500).json({ error: 'server_error' });
-    }
-
-    const uid = await resolveUserIdFromClaims(claims, db);
-    if (uid == null) return res.status(401).json({ error: 'unauthenticated' });
-
-    const {
-      nickname,
-      age,
-      gender,
-      occupation,
-      education,
-      university,
-      hometown,
-      residence,
-      personality,
-      income,
-      atmosphere,
-      photo_url,
-      photo_masked_url,
-    } = req.body || {};
-
-    // 簡易バリデーション（既存+拡張項目）
-    if (nickname != null && typeof nickname !== 'string') return res.status(400).json({ error: 'invalid_nickname' });
-    if (age != null) {
-      const ageNum = typeof age === 'number' ? age : Number(age);
-      if (!(Number.isInteger(ageNum) && ageNum >= 18 && ageNum <= 120)) {
-        return res.status(400).json({ error: 'invalid_age' });
+  // 初期ロード
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await getProfile(); // { profile: {...} }
+        const p = (r?.profile || {}) as any;
+        setForm({
+          nickname: p.nickname ?? '',
+          age: p.age ?? undefined,
+          gender: p.gender ?? '',
+          occupation: p.occupation ?? '',
+          education: p.education ?? '',
+          university: p.university ?? '',
+          hometown: p.hometown ?? '',
+          residence: p.residence ?? '',
+          personality: p.personality ?? '',
+          income: p.income ?? undefined,
+          atmosphere: p.atmosphere ?? '',
+        });
+      } catch (e) {
+        console.warn('[Profile] load failed', e);
+        setMsg('プロフィールの読み込みに失敗しました。');
+      } finally {
+        setLoading(false);
       }
-    }
-    if (gender != null && typeof gender !== 'string') return res.status(400).json({ error: 'invalid_gender' });
-    if (occupation != null && typeof occupation !== 'string') return res.status(400).json({ error: 'invalid_occupation' });
+    })();
+  }, []);
 
-    if (education != null && typeof education !== 'string') return res.status(400).json({ error: 'invalid_education' });
-    if (university != null && typeof university !== 'string') return res.status(400).json({ error: 'invalid_university' });
-    if (hometown != null && typeof hometown !== 'string') return res.status(400).json({ error: 'invalid_hometown' });
-    if (residence != null && typeof residence !== 'string') return res.status(400).json({ error: 'invalid_residence' });
-    if (personality != null && typeof personality !== 'string') return res.status(400).json({ error: 'invalid_personality' });
-
-    if (income != null) {
-      const incomeNum = typeof income === 'number' ? income : Number(income);
-      if (!Number.isFinite(incomeNum) || incomeNum < 0) {
-        return res.status(400).json({ error: 'invalid_income' });
-      }
-    }
-
-    if (atmosphere != null && typeof atmosphere !== 'string') return res.status(400).json({ error: 'invalid_atmosphere' });
-
-    if (photo_url != null && typeof photo_url !== 'string') return res.status(400).json({ error: 'invalid_photo_url' });
-    if (photo_masked_url != null && typeof photo_masked_url !== 'string') return res.status(400).json({ error: 'invalid_photo_masked_url' });
-
-    await db.query(
-      `INSERT INTO user_profiles (
-          user_id, nickname, age, gender, occupation,
-          education, university, hometown, residence,
-          personality, income, atmosphere,
-          photo_url, photo_masked_url
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       ON CONFLICT (user_id) DO UPDATE SET
-         nickname         = COALESCE(EXCLUDED.nickname,         user_profiles.nickname),
-         age              = COALESCE(EXCLUDED.age,              user_profiles.age),
-         gender           = COALESCE(EXCLUDED.gender,           user_profiles.gender),
-         occupation       = COALESCE(EXCLUDED.occupation,       user_profiles.occupation),
-         education        = COALESCE(EXCLUDED.education,        user_profiles.education),
-         university       = COALESCE(EXCLUDED.university,       user_profiles.university),
-         hometown         = COALESCE(EXCLUDED.hometown,         user_profiles.hometown),
-         residence        = COALESCE(EXCLUDED.residence,        user_profiles.residence),
-         personality      = COALESCE(EXCLUDED.personality,      user_profiles.personality),
-         income           = COALESCE(EXCLUDED.income,           user_profiles.income),
-         atmosphere       = COALESCE(EXCLUDED.atmosphere,       user_profiles.atmosphere),
-         photo_url        = COALESCE(EXCLUDED.photo_url,        user_profiles.photo_url),
-         photo_masked_url = COALESCE(EXCLUDED.photo_masked_url, user_profiles.photo_masked_url),
-         updated_at = NOW()`,
-      [
-        uid,
-        nickname ?? null,
-        (age ?? null),
-        gender ?? null,
-        occupation ?? null,
-        education ?? null,
-        university ?? null,
-        hometown ?? null,
-        residence ?? null,
-        personality ?? null,
-        (income ?? null),
-        atmosphere ?? null,
-        photo_url ?? null,
-        photo_masked_url ?? null,
-      ],
-    );
-
-    const r = await db.query(
-      `SELECT u.id, u.line_user_id, u.payment_method_set,
-              p.nickname, p.age, p.gender, p.occupation,
-              p.education, p.university, p.hometown, p.residence,
-              p.personality, p.income, p.atmosphere,
-              p.photo_url, p.photo_masked_url, p.verified_age
-         FROM users u
-    LEFT JOIN user_profiles p ON p.user_id = u.id
-        WHERE u.id = $1`,
-      [uid],
-    );
-    return res.json({ profile: r.rows[0] });
-  } catch (e: any) {
-    console.error('[profile:put]', e?.message || e);
-    return res.status(500).json({ error: 'server_error' });
+  function set<K extends keyof Profile>(key: K, value: Profile[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
-});
 
-export default router;
+  async function onSave() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      // age と income は数値に整形（空なら undefined）
+      const payload: any = {
+        ...form,
+        age:
+          form.age === undefined || form.age === null || form.age === ('' as any)
+            ? undefined
+            : Number(form.age),
+        income:
+          form.income === undefined || form.income === null || form.income === ('' as any)
+            ? undefined
+            : Number(form.income),
+      };
+      await saveProfile(payload);
+      setMsg('保存しました。');
+    } catch (e) {
+      console.error('[Profile] save failed', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="p-4">読み込み中…</div>;
+
+  return (
+    <div className="max-w-xl mx-auto p-4 space-y-4">
+      <h1 className="text-xl font-bold">プロフィール登録</h1>
+
+      <Field label="ニックネーム">
+        <input
+          className="w-full border rounded p-2"
+          value={form.nickname ?? ''}
+          onChange={(e) => set('nickname', e.target.value)}
+          placeholder="例）テスト太郎"
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="年齢">
+          <input
+            className="w-full border rounded p-2"
+            type="number"
+            min={18}
+            max={120}
+            value={form.age ?? ''}
+            onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
+            placeholder="例）28"
+          />
+        </Field>
+
+        <Field label="性別">
+          <select
+            className="w-full border rounded p-2"
+            value={form.gender ?? ''}
+            onChange={(e) => set('gender', e.target.value)}
+          >
+            <option value="">選択してください</option>
+            <option value="male">男性</option>
+            <option value="female">女性</option>
+            <option value="other">その他</option>
+          </select>
+        </Field>
+      </div>
+
+      <Field label="学歴">
+        <input
+          className="w-full border rounded p-2"
+          value={form.education ?? ''}
+          onChange={(e) => set('education', e.target.value)}
+          placeholder="例）大学卒"
+        />
+      </Field>
+
+      <Field label="大学">
+        <input
+          className="w-full border rounded p-2"
+          value={form.university ?? ''}
+          onChange={(e) => set('university', e.target.value)}
+          placeholder="例）○○大学"
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="出身地">
+          <input
+            className="w-full border rounded p-2"
+            value={form.hometown ?? ''}
+            onChange={(e) => set('hometown', e.target.value)}
+            placeholder="例）福岡県"
+          />
+        </Field>
+
+        <Field label="住まい">
+          <input
+            className="w-full border rounded p-2"
+            value={form.residence ?? ''}
+            onChange={(e) => set('residence', e.target.value)}
+            placeholder="例）東京都渋谷区"
+          />
+        </Field>
+      </div>
+
+      <Field label="職業">
+        <input
+          className="w-full border rounded p-2"
+          value={form.occupation ?? ''}
+          onChange={(e) => set('occupation', e.target.value)}
+          placeholder="例）engineer"
+        />
+      </Field>
+
+      <Field label="性格（選択／自由入力可）">
+        <input
+          className="w-full border rounded p-2"
+          list="personality-list"
+          value={form.personality ?? ''}
+          onChange={(e) => set('personality', e.target.value)}
+          placeholder="例）明るい盛り上げタイプ"
+        />
+        <datalist id="personality-list">
+          <option value="明るい盛り上げタイプ" />
+          <option value="落ち着いた聞き役タイプ" />
+          <option value="ムードメーカー" />
+        </datalist>
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="年収（万円）">
+          <input
+            className="w-full border rounded p-2"
+            type="number"
+            min={0}
+            value={form.income ?? ''}
+            onChange={(e) =>
+              set('income', e.target.value === '' ? undefined : Number(e.target.value))
+            }
+            placeholder="例）650"
+          />
+        </Field>
+
+        <Field label="雰囲気（選択／自由入力可）">
+          <input
+            className="w-full border rounded p-2"
+            list="atmosphere-list"
+            value={form.atmosphere ?? ''}
+            onChange={(e) => set('atmosphere', e.target.value)}
+            placeholder="例）クールなエリート系"
+          />
+          <datalist id="atmosphere-list">
+            <option value="クールなエリート系" />
+            <option value="親しみやすい癒し系" />
+            <option value="おしゃれでスマート" />
+          </datalist>
+        </Field>
+      </div>
+
+      {msg && <div className="text-sm text-gray-600">{msg}</div>}
+
+      <div className="pt-2">
+        <button
+          className="px-4 py-2 rounded bg-black text-white disabled:opacity-60"
+          disabled={saving}
+          onClick={onSave}
+        >
+          {saving ? '保存中…' : '保存して次へ'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm text-gray-600">{label}</span>
+      {children}
+    </label>
+  );
+}
