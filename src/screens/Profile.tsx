@@ -92,145 +92,161 @@ export default function ProfileScreen() {
     }
   }
 
-  if (loading) return <div className="p-4">読み込み中…</div>;
+  if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-4">
-      <h1 className="text-xl font-bold">プロフィール登録</h1>
+    <div className="max-w-md mx-auto px-5 pb-28 pt-4">
+      <h1 className="text-2xl font-bold tracking-tight text-center mb-6">
+        プロフィール登録
+      </h1>
 
-      <Field label="ニックネーム">
-        <input
-          className="w-full border rounded p-2"
-          value={form.nickname ?? ''}
-          onChange={(e) => set('nickname', e.target.value)}
-          placeholder="例）テスト太郎"
-        />
-      </Field>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="年齢">
+      {/* カード: 基本情報 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5">
+        <Field label="ニックネーム">
           <input
-            className="w-full border rounded p-2"
-            type="number"
-            min={18}
-            max={120}
-            value={form.age ?? ''}
-            onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
-            placeholder="例）28"
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.nickname ?? ''}
+            onChange={(e) => set('nickname', e.target.value)}
+            placeholder="例）テスト太郎"
           />
         </Field>
 
-        <Field label="性別">
-          <select
-            className="w-full border rounded p-2"
-            value={form.gender ?? ''}
-            onChange={(e) => set('gender', e.target.value)}
-          >
-            <option value="">選択してください</option>
-            <option value="male">男性</option>
-            <option value="female">女性</option>
-            <option value="other">その他</option>
-          </select>
-        </Field>
-      </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="年齢">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              type="number"
+              min={18}
+              max={120}
+              value={form.age ?? ''}
+              onChange={(e) =>
+                set('age', e.target.value === '' ? undefined : Number(e.target.value))
+              }
+              placeholder="例）28"
+            />
+          </Field>
 
-      <Field label="学歴">
-        <input
-          className="w-full border rounded p-2"
-          value={form.education ?? ''}
-          onChange={(e) => set('education', e.target.value)}
-          placeholder="例）大学卒"
-        />
-      </Field>
+          <Field label="性別">
+            <select
+              className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
+              value={form.gender ?? ''}
+              onChange={(e) => set('gender', e.target.value)}
+            >
+              <option value="">選択してください</option>
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+            </select>
+          </Field>
+        </div>
+      </section>
 
-      <Field label="大学">
-        <input
-          className="w-full border rounded p-2"
-          value={form.university ?? ''}
-          onChange={(e) => set('university', e.target.value)}
-          placeholder="例）○○大学"
-        />
-      </Field>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="出身地">
+      {/* カード: 学歴・居住 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
+        <Field label="学歴">
           <input
-            className="w-full border rounded p-2"
-            value={form.hometown ?? ''}
-            onChange={(e) => set('hometown', e.target.value)}
-            placeholder="例）福岡県"
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.education ?? ''}
+            onChange={(e) => set('education', e.target.value)}
+            placeholder="例）大学卒"
           />
         </Field>
 
-        <Field label="住まい">
+        <Field label="大学">
           <input
-            className="w-full border rounded p-2"
-            value={form.residence ?? ''}
-            onChange={(e) => set('residence', e.target.value)}
-            placeholder="例）東京都渋谷区"
-          />
-        </Field>
-      </div>
-
-      <Field label="職業">
-        <input
-          className="w-full border rounded p-2"
-          value={form.occupation ?? ''}
-          onChange={(e) => set('occupation', e.target.value)}
-          placeholder="例）engineer"
-        />
-      </Field>
-
-      <Field label="性格（選択／自由入力可）">
-        <input
-          className="w-full border rounded p-2"
-          list="personality-list"
-          value={form.personality ?? ''}
-          onChange={(e) => set('personality', e.target.value)}
-          placeholder="例）明るい盛り上げタイプ"
-        />
-        <datalist id="personality-list">
-          <option value="明るい盛り上げタイプ" />
-          <option value="落ち着いた聞き役タイプ" />
-          <option value="ムードメーカー" />
-        </datalist>
-      </Field>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="年収（万円）">
-          <input
-            className="w-full border rounded p-2"
-            type="number"
-            min={0}
-            value={form.income ?? ''}
-            onChange={(e) =>
-              set('income', e.target.value === '' ? undefined : Number(e.target.value))
-            }
-            placeholder="例）650"
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.university ?? ''}
+            onChange={(e) => set('university', e.target.value)}
+            placeholder="例）○○大学"
           />
         </Field>
 
-        <Field label="雰囲気（選択／自由入力可）">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="出身地">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              value={form.hometown ?? ''}
+              onChange={(e) => set('hometown', e.target.value)}
+              placeholder="例）福岡県"
+            />
+          </Field>
+
+          <Field label="住まい">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              value={form.residence ?? ''}
+              onChange={(e) => set('residence', e.target.value)}
+              placeholder="例）東京都渋谷区"
+            />
+          </Field>
+        </div>
+      </section>
+
+      {/* カード: 詳細 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
+        <Field label="職業">
           <input
-            className="w-full border rounded p-2"
-            list="atmosphere-list"
-            value={form.atmosphere ?? ''}
-            onChange={(e) => set('atmosphere', e.target.value)}
-            placeholder="例）クールなエリート系"
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.occupation ?? ''}
+            onChange={(e) => set('occupation', e.target.value)}
+            placeholder="例）engineer"
           />
-          <datalist id="atmosphere-list">
-            <option value="クールなエリート系" />
-            <option value="親しみやすい癒し系" />
-            <option value="おしゃれでスマート" />
+        </Field>
+
+        <Field label="性格（選択／自由入力可）">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            list="personality-list"
+            value={form.personality ?? ''}
+            onChange={(e) => set('personality', e.target.value)}
+            placeholder="例）明るい盛り上げタイプ"
+          />
+          <datalist id="personality-list">
+            <option value="明るい盛り上げタイプ" />
+            <option value="落ち着いた聞き役タイプ" />
+            <option value="ムードメーカー" />
           </datalist>
         </Field>
-      </div>
 
-      {msg && <div className="text-sm text-gray-600">{msg}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="年収（万円）">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              type="number"
+              min={0}
+              value={form.income ?? ''}
+              onChange={(e) =>
+                set('income', e.target.value === '' ? undefined : Number(e.target.value))
+              }
+              placeholder="例）650"
+            />
+          </Field>
 
-      <div className="pt-2">
+          <Field label="雰囲気（選択／自由入力可）">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              list="atmosphere-list"
+              value={form.atmosphere ?? ''}
+              onChange={(e) => set('atmosphere', e.target.value)}
+              placeholder="例）クールなエリート系"
+            />
+            <datalist id="atmosphere-list">
+              <option value="クールなエリート系" />
+              <option value="親しみやすい癒し系" />
+              <option value="おしゃれでスマート" />
+            </datalist>
+          </Field>
+        </div>
+      </section>
+
+      {msg && (
+        <div className="text-center text-sm text-gray-600 mt-4">{msg}</div>
+      )}
+
+      {/* 固定フッター風ボタン */}
+      <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
-          className="px-4 py-2 rounded bg-black text-white disabled:opacity-60"
+          className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
           disabled={saving}
           onClick={onSave}
         >
@@ -243,8 +259,8 @@ export default function ProfileScreen() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-sm text-gray-600">{label}</span>
+    <label className="block">
+      <span className="text-[13px] text-gray-600 mb-1 block">{label}</span>
       {children}
     </label>
   );
