@@ -188,3 +188,11 @@ input:-webkit-autofill:focus {
   :root { --font: 17px; --ctrl-h: 50px; }
   .tile { height: 120px; }
 }
+
+/* 入力欄の文字色は白継承を上書きする */
+input,
+textarea,
+select {
+  color: #111 !important;
+  background-color: #fff !important;
+}
