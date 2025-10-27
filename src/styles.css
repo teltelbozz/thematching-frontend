@@ -1,6 +1,7 @@
 /* src/styles.css */
 @import "tailwindcss";
 
+/* ========== Theme Tokens ========== */
 :root{
   /* 色 */
   --bg:#0e0e10;
@@ -22,6 +23,7 @@
   --font-xl:24px;
 }
 
+/* ========== Base ========== */
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {
@@ -62,22 +64,25 @@ body {
   color: var(--muted);
 }
 
-/* 入力・選択・ボタンの共通外観 */
+/* ========== Controls (shared look) ========== */
+/* 共有外観：textarea を追加、select は矢印装飾も同ブロックで管理 */
 input[type="text"],
 input[type="number"],
 input[type="date"],
+textarea,
 select,
 .button {
   height: var(--ctrl-h);
   border-radius: calc(var(--radius) - 4px);
   border: 1px solid var(--line);
-  background: #ffffff;     /* 背景：白に変更 */
-  color: #111111;          /* 文字：黒に変更 */
+  background: #ffffff;     /* 背景：白 */
+  color: #111111;          /* 文字：黒 */
   padding: 0 14px;
   outline: none;
   font-size: var(--font);
 }
 
+/* select: 矢印と文字色を同居（重複ルールを整理） */
 select {
   padding-right: 34px;
   appearance: none;
@@ -89,15 +94,22 @@ select {
     calc(100% - 14px) calc(50% + 1px);
   background-size: 7px 7px, 7px 7px;
   background-repeat: no-repeat;
+  color: #111111;
 }
 
-input:focus, select:focus { border-color: #2a7cf7; }
+/* フォーカス */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #2a7cf7;
+}
 
 /* 主要ボタン */
 .btn-primary {
   background: #2a7cf7;
   border-color: #2a7cf7;
   font-weight: 700;
+  color: #fff; /* 念押し */
 }
 .btn-primary:active { filter: brightness(.95); }
 
@@ -136,41 +148,43 @@ input:focus, select:focus { border-color: #2a7cf7; }
 /* 補助テキスト */
 .text-muted { color: var(--muted); font-size: var(--font-sm); }
 
-/* スマホ横幅が狭い端末で若干ゆったり */
-@media (max-width: 360px) {
-  :root { --font: 17px; --ctrl-h: 50px; }
-  .tile { height: 120px; }
-}
-
-/* --- Form text visibility fix (inputs look dark on light fields) --- */
+/* ========== Visibility Hard-Fix ========== */
+/* ここからは“勝ちに行く”層。Tailwind/Preflightやダークテーマ継承を上書き */
 input[type="text"],
 input[type="number"],
 input[type="date"],
 textarea,
 select {
-  background: #ffffff;     /* 入力欄の背景は白 */
-  color: #111111;          /* 文字は黒 */
-  caret-color: #111111;    /* キャレットも黒 */
-  color-scheme: light;     /* iOS/Safari のダーク配色を無効化 */
+  background: #ffffff !important;
+  color: #111111 !important;
+  caret-color: #111111 !important;
+  color-scheme: light;
 }
 
-/* プレースホルダーは薄いグレーで統一（白っぽくならない） */
+/* プレースホルダーは灰色で統一（白っぽくならない） */
 input::placeholder,
 textarea::placeholder {
-  color: #6b7280;          /* Tailwind の gray-500 相当 */
+  color: #6b7280;  /* gray-500 */
   opacity: 1;
 }
 
-/* セレクトも明示的に黒文字 */
-select {
-  color: #111111;
-}
-
-/* オートフィル時（iOS/Safari/Chrome）に文字色が白化するのを防ぐ */
+/* オートフィル（iOS/Safari/Chrome）での白化対策 */
 input:-webkit-autofill,
 textarea:-webkit-autofill,
 select:-webkit-autofill {
   -webkit-text-fill-color: #111111 !important;
-  box-shadow: 0 0 0px 1000px #ffffff inset; /* 背景を白で上書き */
-  transition: background-color 9999s ease-in-out 0s; /* 背景色のチラつき防止 */
+  box-shadow: 0 0 0px 1000px #ffffff inset;
+  transition: background-color 9999s ease-in-out 0s;
+  border: 1px solid var(--line) !important;
+}
+
+/* オートフィル時の枠色も統一（任意だが見た目が安定） */
+input:-webkit-autofill:focus {
+  border-color: #2a7cf7 !important;
+}
+
+/* ========== Responsive tweak ========== */
+@media (max-width: 360px) {
+  :root { --font: 17px; --ctrl-h: 50px; }
+  .tile { height: 120px; }
 }
