@@ -1,9 +1,6 @@
 /* src/styles.css */
 @import "tailwindcss";
 
-/* 必要なら、軽いベース調整をここに */
-html, body, #root { height: 100%; }
-
 :root{
   /* 色 */
   --bg:#0e0e10;
@@ -74,8 +71,8 @@ select,
   height: var(--ctrl-h);
   border-radius: calc(var(--radius) - 4px);
   border: 1px solid var(--line);
-  background: #14151a;
-  color: var(--text);
+  background: #ffffff;     /* 背景：白に変更 */
+  color: #111111;          /* 文字：黒に変更 */
   padding: 0 14px;
   outline: none;
   font-size: var(--font);
