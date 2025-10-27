@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './styles.css';
 
 // --- 追加: どんな未捕捉エラーもログ&画面表示する ---
 function installGlobalErrorTrap() {

@@ -1,3 +1,9 @@
+/* src/styles.css */
+@import "tailwindcss";
+
+/* 必要なら、軽いベース調整をここに */
+html, body, #root { height: 100%; }
+
 :root{
   /* 色 */
   --bg:#0e0e10;
