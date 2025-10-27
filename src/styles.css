@@ -141,3 +141,36 @@ input:focus, select:focus { border-color: #2a7cf7; }
   :root { --font: 17px; --ctrl-h: 50px; }
   .tile { height: 120px; }
 }
+
+/* --- Form text visibility fix (inputs look dark on light fields) --- */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  background: #ffffff;     /* 入力欄の背景は白 */
+  color: #111111;          /* 文字は黒 */
+  caret-color: #111111;    /* キャレットも黒 */
+  color-scheme: light;     /* iOS/Safari のダーク配色を無効化 */
+}
+
+/* プレースホルダーは薄いグレーで統一（白っぽくならない） */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;          /* Tailwind の gray-500 相当 */
+  opacity: 1;
+}
+
+/* セレクトも明示的に黒文字 */
+select {
+  color: #111111;
+}
+
+/* オートフィル時（iOS/Safari/Chrome）に文字色が白化するのを防ぐ */
+input:-webkit-autofill,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: #111111 !important;
+  box-shadow: 0 0 0px 1000px #ffffff inset; /* 背景を白で上書き */
+  transition: background-color 9999s ease-in-out 0s; /* 背景色のチラつき防止 */
+}
