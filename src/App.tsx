@@ -10,6 +10,8 @@ import Preferences from './screens/Preferences';
 import Faq from './screens/Faq';
 import Invite from './screens/Invite';
 import Account from './screens/Account';
+import MatchPrefs from './screens/MatchPrefs';
+
 
 function BootRouter() {
   const navigate = useNavigate();
@@ -79,7 +81,7 @@ function BootRouter() {
       <Route path="/" element={<Home />} />
       <Route path="/profile" element={<ProfileSetup />} />
       <Route path="/mypage" element={<MyPage />} />
-      <Route path="/mypage/preferences" element={<Preferences />} />
+      <Route path="/mypage/preferences" element={<MatchPrefs />} />
       <Route path="/mypage/faq" element={<Faq />} />
       <Route path="/mypage/invite" element={<Invite />} />
       <Route path="/mypage/account" element={<Account />} />
