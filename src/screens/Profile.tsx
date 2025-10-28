@@ -34,6 +34,14 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // 成功トーストは3秒で自動消滅
+  useEffect(() => {
+    if (msg === '保存しました。') {
+      const t = setTimeout(() => setMsg(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [msg]);
+
   // 初期ロード
   useEffect(() => {
     (async () => {
@@ -83,16 +91,18 @@ export default function ProfileScreen() {
             : Number(form.income),
       };
       await saveProfile(payload);
-      setMsg('保存しました。');
+      setMsg('保存しました。'); // ← 成功トースト
     } catch (e) {
       console.error('[Profile] save failed', e);
-      setMsg('保存に失敗しました。');
+      setMsg('保存に失敗しました。'); // ← エラーは自動消滅しない
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
+
+  const isError = msg && msg.includes('失敗');
 
   return (
     <div className="max-w-md mx-auto px-5 pb-28 pt-4">
@@ -239,8 +249,22 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {msg && (
-        <div className="text-center text-sm text-gray-600 mt-4">{msg}</div>
+      {/* エラーは従来表示（自動で消えない） */}
+      {isError && (
+        <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
+      )}
+
+      {/* 成功トースト（自動で3秒で消える） */}
+      {msg === '保存しました。' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50"
+        >
+          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
+            保存しました
+          </div>
+        </div>
       )}
 
       {/* 固定フッター風ボタン */}

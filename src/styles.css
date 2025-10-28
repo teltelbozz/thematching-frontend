@@ -164,7 +164,7 @@ select {
 /* プレースホルダーは灰色で統一（白っぽくならない） */
 input::placeholder,
 textarea::placeholder {
-  color: #6b7280;  /* gray-500 */
+  color: #7c828f;  /* gray-500 */
   opacity: 1;
 }
 
