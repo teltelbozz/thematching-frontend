@@ -84,3 +84,35 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   setAccessToken(at);
   return at; // ← これを返すように変更
 }
+
+// --- match-prefs ------------------------------------------------------------
+export async function getMatchPrefs() {
+  const base = import.meta.env.VITE_API_BASE_URL as string;
+  const token = getAccessToken();
+  const res = await fetch(`${base}/match-prefs`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!res.ok) throw new Error(`/match-prefs GET failed: ${res.status}`);
+  return res.json(); // { prefs: {...} }
+}
+
+export async function saveMatchPrefs(payload: any) {
+  const base = import.meta.env.VITE_API_BASE_URL as string;
+  const token = getAccessToken();
+  const res = await fetch(`${base}/match-prefs`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`/match-prefs PUT failed: ${res.status} ${text}`);
+  }
+  return res.json(); // { prefs: {...} }
+}
