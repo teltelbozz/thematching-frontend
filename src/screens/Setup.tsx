@@ -68,21 +68,28 @@ export default function Setup({ defaultMode }: Props) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      try {
-        const r = await getSetup(); // { setup: SetupDTO | null }
-        if (r?.setup) {
-          const s: SetupDTO = r.setup;
-          setTypeMode(s.type_mode ?? 'wine_talk');
-          const map: Record<string, boolean> = {};
-          for (const sl of s.candidate_slots || []) {
-            map[`${sl.date} ${sl.time}`] = true;
-          }
-          setSelected(map);
-          if (s.cost_pref) setCost(s.cost_pref);
+    try {
+      const r = await getSetup(); // { setup: SetupDTO | null }
+      if (r?.setup) {
+        const s: SetupDTO = r.setup;
+        setTypeMode(s.type_mode ?? 'wine_talk');
+        const map: Record<string, boolean> = {};
+        for (const sl of s.candidate_slots || []) {
+          map[`${sl.date} ${sl.time}`] = true;
         }
-      } finally {
-        setLoading(false);
+        setSelected(map);
+        if (s.cost_pref) setCost(s.cost_pref);
       }
+    } catch (e: any) {
+      // 失敗しても画面は出す（新規入力を許可）
+      console.warn('[setup] load failed', e);
+      // 401 っぽければプロフィール（= 認証/初期登録）へ誘導も可
+      if (String(e?.message ?? '').includes('401')) {
+        // ここで nav('/profile') してもOK。まずは静かに続行にしておきます。
+      }
+    } finally {
+      setLoading(false);
+    }
     })();
   }, []);
 
