@@ -1,153 +1,259 @@
 // src/screens/Setup.tsx
-import { useEffect, useState } from 'react';
-import { whenAuthReady } from '../liff';
-import { getSetup, saveSetup } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { getMe, getSetup, saveSetup, type SetupDTO, type CandidateSlot } from '../api';
 import { useNavigate } from 'react-router-dom';
 
-// 簡易的な型（API 仕様はバックエンド側に合わせて適宜拡張）
-type SetupData = {
-  style?: 'solo' | 'friends';
-  date?: string; // YYYY-MM-DD
-  preferences?: {
-    type?: 'talk' | 'play' | 'either';
-    venue?: 'izakaya' | 'dining' | 'bar';
-    cost?: 'men_pay' | 'split' | 'follow';
-  };
-};
+type Props = { defaultMode?: 'solo' | 'friends' };
 
-export default function Setup() {
+// JSTでの金/土判定と次週までのグリッドを生成
+function getNextTwoWeeksFriSatSlots(now = new Date()): CandidateSlot[] {
+  // now を JST に補正（環境依存を避けるため、UTCベースで日付操作）
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const start = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate()));
+  const slots: CandidateSlot[] = [];
+  for (let d = 0; d < 14; d++) {
+    const dt = new Date(start.getTime() + d * 24 * 60 * 60 * 1000);
+    const w = dt.getUTCDay(); // 5=Fri, 6=Sat
+    if (w === 5 || w === 6) {
+      const yyyy = dt.getUTCFullYear();
+      const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getUTCDate()).padStart(2, '0');
+      const date = `${yyyy}-${mm}-${dd}`;
+      slots.push({ date, time: '19:00' }, { date, time: '21:00' });
+    }
+  }
+  return slots;
+}
+
+// 締切: スロット日時の 2日前 20:00 JST
+function isPastDeadline(slot: CandidateSlot, now = new Date()): boolean {
+  // slot_dt JST
+  const slotDt = new Date(`${slot.date}T${slot.time}:00+09:00`);
+  const deadline = new Date(slotDt.getTime() - (2 * 24 * 60 * 60 * 1000));
+  deadline.setHours(20, 0, 0, 0); // 2日前 20:00 JST
+  return now.getTime() > deadline.getTime();
+}
+
+export default function Setup({ defaultMode }: Props) {
   const nav = useNavigate();
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [gender, setGender] = useState<'male'|'female'|'unknown'>('unknown');
 
-  const [style, setStyle] = useState<SetupData['style']>('solo');
-  const [date, setDate] = useState<string>('');
-  const [type, setType] = useState<SetupData['preferences']['type']>('either');
-  const [venue, setVenue] = useState<SetupData['preferences']['venue']>('izakaya');
-  const [cost, setCost] = useState<SetupData['preferences']['cost']>('split');
+  // 入力モデル
+  const [typeMode, setTypeMode] = useState<SetupDTO['type_mode']>('wine_talk');
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [cost, setCost] = useState<SetupDTO['cost_pref']>('men_pay_all');
 
+  // ルート別デフォルト（/solo|/friends）
+  useEffect(() => {
+    if (defaultMode === 'friends') {
+      // 仕様上、現時点では type_mode には直接影響しないが
+      // 将来: 参加形態の差分を入れるときにここで初期状態を分ける
+    }
+  }, [defaultMode]);
+
+  // プロフィールから gender を取得（費用方針の選択肢に使う）
   useEffect(() => {
     (async () => {
       try {
-        await whenAuthReady();
-        const data = (await getSetup()) as SetupData;
-        if (data?.style) setStyle(data.style);
-        if (data?.date) setDate(data.date);
-        if (data?.preferences?.type) setType(data.preferences.type);
-        if (data?.preferences?.venue) setVenue(data.preferences.venue);
-        if (data?.preferences?.cost) setCost(data.preferences.cost);
-      } catch (e: any) {
-        // 初回は未登録のことも多いので致命扱いにしない
-        console.warn('[setup] get failed:', e?.message);
+        const r = await getMe();      // { userId, gender?: 'male'|'female' }
+        const g = (r?.gender as any) || 'unknown';
+        setGender(g === 'male' || g === 'female' ? g : 'unknown');
+      } catch {}
+    })();
+  }, []);
+
+  // 既存設定のロード
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await getSetup(); // { setup: SetupDTO | null }
+        if (r?.setup) {
+          const s: SetupDTO = r.setup;
+          setTypeMode(s.type_mode ?? 'wine_talk');
+          const map: Record<string, boolean> = {};
+          for (const sl of s.candidate_slots || []) {
+            map[`${sl.date} ${sl.time}`] = true;
+          }
+          setSelected(map);
+          if (s.cost_pref) setCost(s.cost_pref);
+        }
       } finally {
-        setLoaded(true);
+        setLoading(false);
       }
     })();
   }, []);
 
+  const grid = useMemo(() => getNextTwoWeeksFriSatSlots(), []);
+
+  const toggle = (key: string, sl?: CandidateSlot) => {
+    if (sl && isPastDeadline(sl)) return; // ガード
+    setSelected(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
   async function onSave() {
+    if (selectedCount < 1) return alert('少なくとも1枠を選択してください。');
+    setSaving(true);
     try {
-      setSaving(true);
-      setErr(null);
-      const payload: SetupData = {
-        style,
-        date,
-        preferences: { type, venue, cost },
+      const candidate_slots: CandidateSlot[] = Object.entries(selected)
+        .filter(([, v]) => v)
+        .map(([k]) => {
+          const [date, time] = k.split(' ');
+          return { date, time: time as '19:00'|'21:00' };
+   })
+   // 重複排除
+   .reduce((acc, cur) => {
+     const key = `${cur.date} ${cur.time}`;
+     if (!acc.some(x => `${x.date} ${x.time}` === key)) acc.push(cur);
+     return acc;
+   }, [] as CandidateSlot[])
+   // 並び順固定（date → time）
+   .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+      const payload: SetupDTO = {
+        type_mode: typeMode,
+        candidate_slots,
+        location: 'shibuya_shinjuku',
+        venue_pref: null, // v2.6は固定
+        cost_pref: cost,
       };
+
       await saveSetup(payload);
-      // 保存後はマイページに戻る
-      nav('/mypage', { replace: true });
+      alert('保存しました');
+      nav('/mypage');
     } catch (e: any) {
-      setErr(e?.message ?? '合コン設定の保存に失敗しました');
+      const msg = (e?.message ?? 'unknown error')
+      .replace('failed:', 'サーバエラー:'); // 簡易整形
+      alert('保存に失敗しました: ' + msg);
     } finally {
       setSaving(false);
     }
   }
 
-  if (!loaded) {
-    return (
-      <div style={page}>
-        <h1 style={title}>合コン設定</h1>
-        <p>読み込み中...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
   return (
-    <div style={page}>
-      <h1 style={title}>合コン設定</h1>
-      {err && <p style={errorBox}>{err}</p>}
+    <div className="max-w-screen-sm mx-auto p-4 space-y-6">
+      <h1 className="text-xl font-semibold">合コンの条件を入力</h1>
 
-      {/* 参加スタイル */}
-      <section style={section}>
-        <h2 style={h2}>参加スタイル</h2>
-        <div style={radioRow}>
-          <label><input type="radio" name="style" checked={style==='solo'} onChange={()=>setStyle('solo')} /> 一人で参加</label>
-          <label><input type="radio" name="style" checked={style==='friends'} onChange={()=>setStyle('friends')} /> 友達と参加</label>
+      {/* 会のタイプ */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+        <div className="font-medium">会のタイプ</div>
+        <div className="grid grid-cols-1 gap-3">
+          <label className="flex items-center gap-3">
+            <input
+              type="radio"
+              name="type_mode"
+              checked={typeMode === 'wine_talk'}
+              onChange={() => setTypeMode('wine_talk')}
+            />
+            <span>ワインの話をしたい</span>
+          </label>
+          <label className="flex items-center gap-3">
+            <input
+              type="radio"
+              name="type_mode"
+              checked={typeMode === 'wine_and_others'}
+              onChange={() => setTypeMode('wine_and_others')}
+            />
+            <span>ワイン以外の話もしたい</span>
+          </label>
         </div>
       </section>
 
-      {/* 参加日 */}
-      <section style={section}>
-        <h2 style={h2}>合コン参加日</h2>
-        <input
-          type="date"
-          value={date}
-          onChange={(e)=>setDate(e.target.value)}
-          style={input}
-        />
-        <p style={{ color:'#64748b', fontSize:13, marginTop:8 }}>※ 人気日はアプリ上で「人気日」表示予定</p>
+      {/* 日時（当週・次週の金/土 × 19:00/21:00） */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+        <div className="font-medium">参加できる日時（複数選択可）</div>
+        <div className="grid grid-cols-2 gap-2">
+          {grid.map((sl) => {
+            const key = `${sl.date} ${sl.time}`;
+            const disabled = isPastDeadline(sl);
+            const active = selected[key];
+            return (
+              <button
+                key={key}
+                disabled={disabled}
+                onClick={() => toggle(key, sl)}
+                className={[
+                  'h-12 rounded-lg border text-sm px-3 text-left',
+                  active ? 'bg-black text-white border-black' : 'bg-white',
+                  disabled ? 'opacity-40 cursor-not-allowed' : 'hover:ring-2 hover:ring-black/10'
+                ].join(' ')}
+                title={disabled ? '締切（2日前20:00）を過ぎています' : ''}
+              >
+                <div className="font-medium">
+                  {sl.date}（{'日月火水木金土'[new Date(`${sl.date}T00:00:00+09:00`).getDay()]}）
+                </div>
+                <div>{sl.time} 開始</div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="text-right text-sm text-gray-500">※ 締切：各枠の2日前 20:00</div>
       </section>
 
-      {/* 希望条件 */}
-      <section style={section}>
-        <h2 style={h2}>希望の条件（保存可）</h2>
+      {/* 費用方針（性別で選択肢が異なる） */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+        <div className="font-medium">費用の方針</div>
+        <div className="grid grid-cols-1 gap-3">
+          <label className="flex items-center gap-3">
+            <input
+              type="radio"
+              name="cost"
+              checked={cost === 'men_pay_all'}
+              onChange={() => setCost('men_pay_all')}
+            />
+            <span>男性が支払う</span>
+          </label>
 
-        <div style={formRow}>
-          <label style={label}>どんな合コンがいい？</label>
-          <select value={type} onChange={(e)=>setType(e.target.value as any)} style={input}>
-            <option value="talk">話す（居酒屋/ダイニング）</option>
-            <option value="play">遊ぶ（シーシャ/ダーツ）</option>
-            <option value="either">どちらでも良い</option>
-          </select>
-        </div>
+          {gender === 'male' && (
+            <label className="flex items-center gap-3">
+              <input
+                type="radio"
+                name="cost"
+                checked={cost === 'split_even'}
+                onChange={() => setCost('split_even')}
+              />
+              <span>全員で割り勘</span>
+            </label>
+          )}
 
-        <div style={formRow}>
-          <label style={label}>お店について</label>
-          <select value={venue} onChange={(e)=>setVenue(e.target.value as any)} style={input}>
-            <option value="izakaya">安ウマ居酒屋</option>
-            <option value="dining">お洒落ダイニング</option>
-            <option value="bar">BAR / 夜カフェ</option>
-          </select>
-        </div>
-
-        <div style={formRow}>
-          <label style={label}>合コン費用</label>
-          <select value={cost} onChange={(e)=>setCost(e.target.value as any)} style={input}>
-            <option value="men_pay">男性が全て払う</option>
-            <option value="split">全員で割り勘がいい</option>
-            <option value="follow">相手に合わせる</option>
-          </select>
+          {gender === 'female' && (
+            <label className="flex items-center gap-3">
+              <input
+                type="radio"
+                name="cost"
+                checked={cost === 'follow_partner'}
+                onChange={() => setCost('follow_partner')}
+              />
+              <span>相手に合わせる</span>
+            </label>
+          )}
         </div>
       </section>
 
-      <div style={{ marginTop: 24 }}>
-        <button style={primaryBtn} onClick={onSave} disabled={saving}>
-          {saving ? '保存中...' : '保存する'}
+      {/* 場所とお店は固定（v2.6） */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 text-sm">
+        <div>場所：渋谷・新宿エリア（固定）</div>
+        <div>お店：当面はサービス側で指定</div>
+      </section>
+
+      <div className="pt-2">
+        <button
+          onClick={onSave}
+          disabled={saving || selectedCount < 1}
+          className="h-11 px-5 rounded-lg bg-black text-white disabled:bg-gray-400"
+        >
+          {saving ? '保存中…' : 'この条件で保存する'}
         </button>
+        <div className="text-sm text-gray-500 mt-2">
+          少なくとも1枠以上の日時を選択してください
+        </div>
       </div>
     </div>
   );
 }
-
-const page: React.CSSProperties = { padding: 16, maxWidth: 560, margin: '0 auto' };
-const title: React.CSSProperties = { fontSize: 22, fontWeight: 800, margin: '0 0 16px' };
-const section: React.CSSProperties = { marginBottom: 20 };
-const h2: React.CSSProperties = { fontSize: 16, fontWeight: 800, margin: '0 0 8px' };
-const radioRow: React.CSSProperties = { display:'flex', gap: 16, color:'#334155', fontSize:15 };
-const formRow: React.CSSProperties = { display:'flex', flexDirection:'column', gap: 8, marginBottom: 12 };
-const label: React.CSSProperties = { fontSize: 14, color:'#475569', fontWeight: 700 };
-const input: React.CSSProperties = { padding:'12px 14px', border:'1px solid #e5e7eb', borderRadius:12, fontSize:16 };
-const primaryBtn: React.CSSProperties = { padding:'12px 16px', borderRadius:12, background:'#0ea5e9', color:'#fff', border:'none', fontWeight:700, cursor:'pointer', width:'100%' };
-const errorBox: React.CSSProperties = { background:'#fee2e2', color:'#991b1b', padding:'8px 12px', borderRadius:8, marginBottom:12, fontSize:14 };

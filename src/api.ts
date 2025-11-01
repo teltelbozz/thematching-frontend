@@ -4,7 +4,6 @@ let ACCESS_TOKEN: string | null = null;
 export function setAccessToken(t: string) {
   ACCESS_TOKEN = t;
 }
-
 export function getAccessToken() {
   return ACCESS_TOKEN;
 }
@@ -15,6 +14,7 @@ const API_BASE =
 
 if (!API_BASE) console.warn('[api] VITE_API_BASE_URL is not set');
 
+// API_BASE に末尾スラッシュがあっても安全に結合
 function base(path: string) {
   return API_BASE.replace(/\/+$/, '') + path;
 }
@@ -48,19 +48,40 @@ export async function apiGetJson<T = any>(path: string): Promise<T> {
   if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json();
 }
-
 export async function apiPutJson<T = any>(path: string, body: any): Promise<T> {
   const r = await apiFetch(path, { method: 'PUT', body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json();
 }
 
-// domain helpers
+/* ===================== Domain Types ===================== */
+
+export type CandidateSlot = { date: string; time: '19:00'|'21:00' };
+
+export type SetupDTO = {
+  type_mode: 'wine_talk' | 'wine_and_others';
+  candidate_slots: CandidateSlot[];
+  location: 'shibuya_shinjuku';
+  venue_pref?: null; // v2.6 初期は固定
+  cost_pref: 'men_pay_all' | 'split_even' | 'follow_partner';
+};
+
+/* ===================== Domain APIs ===================== */
+
+// me / profile
 export const getProfile = () => apiGetJson('/profile');
 export const saveProfile = (input: any) => apiPutJson('/profile', input);
-export const getSetup = () => apiGetJson('/setup');
-export const saveSetup = (input: any) => apiPutJson('/setup', input);
+export const getMe = () => apiGetJson('/me'); // 便利ヘルパ（性別などの取得に）
 
+// setup（型を付ける）
+export const getSetup = () => apiGetJson<{ setup: SetupDTO | null }>('/setup');
+export const saveSetup = (input: SetupDTO) => apiPutJson<{ setup: SetupDTO }>('/setup', input);
+
+// match-prefs（401時のrefreshを効かせるように統一）
+export const getMatchPrefs = () => apiGetJson('/match-prefs');            // -> { prefs: {...} }
+export const saveMatchPrefs = (payload: any) => apiPutJson('/match-prefs', payload);
+
+/* ===================== Auth ===================== */
 /**
  * ログイン直後（LIFFからIDトークンを受け取ったとき）に使う専用ヘルパ
  * - /auth/login に id_token を POST
@@ -75,6 +96,7 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   if (!r.ok) {
     const t = await r.text().catch(() => '');
     throw new Error(`login_failed:${r.status}:${t}`);
+    // note: ここでは throw で十分。呼び出し元で UI エラー表示してください
   }
 
   const j = await r.json().catch(() => ({}));
@@ -82,37 +104,5 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   if (!at) throw new Error('no_access_token_from_server');
 
   setAccessToken(at);
-  return at; // ← これを返すように変更
-}
-
-// --- match-prefs ------------------------------------------------------------
-export async function getMatchPrefs() {
-  const base = import.meta.env.VITE_API_BASE_URL as string;
-  const token = getAccessToken();
-  const res = await fetch(`${base}/match-prefs`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: { Authorization: 'Bearer ' + token },
-  });
-  if (!res.ok) throw new Error(`/match-prefs GET failed: ${res.status}`);
-  return res.json(); // { prefs: {...} }
-}
-
-export async function saveMatchPrefs(payload: any) {
-  const base = import.meta.env.VITE_API_BASE_URL as string;
-  const token = getAccessToken();
-  const res = await fetch(`${base}/match-prefs`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + token,
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`/match-prefs PUT failed: ${res.status} ${text}`);
-  }
-  return res.json(); // { prefs: {...} }
+  return at;
 }
