@@ -144,14 +144,14 @@ export default function Setup({ defaultMode }: Props) {
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
   return (
-    <div className="max-w-screen-sm mx-auto p-4 space-y-6">
+    <div className="max-w-screen-sm mx-auto p-4 space-y-6 bg-white text-gray-900">
       <h1 className="text-xl font-semibold">合コンの条件を入力</h1>
 
       {/* 会のタイプ */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+      <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">会のタイプ</div>
         <div className="grid grid-cols-1 gap-3">
-          <label className="flex items-center gap-3">
+          <label className="flex items-center gap-3 text-gray-800">
             <input
               type="radio"
               name="type_mode"
@@ -173,7 +173,7 @@ export default function Setup({ defaultMode }: Props) {
       </section>
 
       {/* 日時（当週・次週の金/土 × 19:00/21:00） */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+      <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">参加できる日時（複数選択可）</div>
         <div className="grid grid-cols-2 gap-2">
           {grid.map((sl) => {
@@ -187,6 +187,8 @@ export default function Setup({ defaultMode }: Props) {
                 onClick={() => toggle(key, sl)}
                 className={[
                   'h-12 rounded-lg border text-sm px-3 text-left',
+                   // 非選択時も文字が見えるように
+                  active ? '' : 'text-gray-900 border-gray-300',
                   active ? 'bg-black text-white border-black' : 'bg-white',
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:ring-2 hover:ring-black/10'
                 ].join(' ')}
@@ -204,10 +206,10 @@ export default function Setup({ defaultMode }: Props) {
       </section>
 
       {/* 費用方針（性別で選択肢が異なる） */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
+      <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">費用の方針</div>
         <div className="grid grid-cols-1 gap-3">
-          <label className="flex items-center gap-3">
+           <label className="flex items-center gap-3 text-gray-800">
             <input
               type="radio"
               name="cost"
@@ -244,7 +246,7 @@ export default function Setup({ defaultMode }: Props) {
       </section>
 
       {/* 場所とお店は固定（v2.6） */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 text-sm">
+      <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 text-sm">
         <div>場所：渋谷・新宿エリア（固定）</div>
         <div>お店：当面はサービス側で指定</div>
       </section>
