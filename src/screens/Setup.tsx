@@ -1,7 +1,7 @@
 // src/screens/Setup.tsx
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getProfile,
+  getMe,
   getSetup,
   saveSetup,
   type SetupDTO,
@@ -70,8 +70,8 @@ export default function Setup({ defaultMode }: Props) {
   useEffect(() => {
     (async () => {
       try {
-       const r = await getProfile(); // { profile: { gender?: 'male'|'female' } }
-       const g = (r?.profile?.gender as any) || 'unknown';
+        const r = await getMe(); // { userId, gender? }
+        const g = (r?.gender as any) || 'unknown';
         setGender(g === 'male' || g === 'female' ? g : 'unknown');
       } catch {
         // 失敗しても画面は表示
