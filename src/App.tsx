@@ -19,6 +19,7 @@ import Invite from './screens/Invite';
 import Account from './screens/Account';
 import MatchPrefs from './screens/MatchPrefs';
 import Setup from './screens/Setup';
+import GroupPage from './screens/GroupPage';
 
 // ---- 起動・認証・ディープリンク処理をまとめて担当 ----
 function BootRouter() {
@@ -118,6 +119,10 @@ export default function App() {
 
         {/* フォールバック */}
         <Route path="*" element={<Home />} />
+
+        {/* グループページ */}
+        <Route path="/group/:token" element={<GroupPage />} />
+
       </Routes>
     </BrowserRouter>
   );

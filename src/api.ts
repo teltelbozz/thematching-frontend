@@ -106,3 +106,19 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   setAccessToken(at);
   return at;
 }
+
+// src/api.ts内の最後あたりに追加
+
+export async function getGroupByToken(token: string) {
+  const base = import.meta.env.VITE_API_BASE_URL as string;
+
+  const res = await fetch(`${base}/groups/${token}`, {
+    method: "GET",
+    credentials: "include"
+  });
+
+  if (!res.ok) {
+    throw new Error(`/groups/${token} GET failed: ${res.status}`);
+  }
+  return res.json(); // { group: {...}, members: [...] }
+}
