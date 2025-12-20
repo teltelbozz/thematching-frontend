@@ -53,6 +53,11 @@ export async function apiPutJson<T = any>(path: string, body: any): Promise<T> {
   if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
   return r.json();
 }
+export async function apiPostJson<T = any>(path: string, body: any): Promise<T> {
+  const r = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  return r.json();
+}
 
 /* ===================== Domain Types ===================== */
 
@@ -81,6 +86,34 @@ export const saveSetup = (input: SetupDTO) => apiPutJson<{ setup: SetupDTO }>('/
 export const getMatchPrefs = () => apiGetJson('/match-prefs');            // -> { prefs: {...} }
 export const saveMatchPrefs = (payload: any) => apiPutJson('/match-prefs', payload);
 
+/* ===================== Terms (NEW) ===================== */
+/**
+ * 想定API（バックエンド側と合わせる想定）:
+ *  - GET  /terms/current    -> { ok, terms: { id, version, title, body_md, effective_at } }
+ *  - GET  /terms/status     -> { ok, accepted: boolean, currentVersion?: string, acceptedVersion?: string }
+ *  - POST /terms/accept     -> { ok, accepted: true, termsId, version }
+ */
+export type TermsDoc = {
+  id: number;
+  version: string;
+  title: string;
+  body_md: string;
+  effective_at: string;
+};
+
+export type TermsCurrentResponse = { ok: true; terms: TermsDoc };
+export type TermsStatusResponse = {
+  ok: true;
+  accepted: boolean;
+  currentVersion?: string;
+  acceptedVersion?: string | null;
+};
+
+export const getCurrentTerms = () => apiGetJson<TermsCurrentResponse>('/terms/current');
+export const getTermsStatus = () => apiGetJson<TermsStatusResponse>('/terms/status');
+export const acceptTerms = (payload?: { termsId?: number; version?: string; userAgent?: string }) =>
+  apiPostJson('/terms/accept', payload ?? {});
+
 /* ===================== Auth ===================== */
 /**
  * ログイン直後（LIFFからIDトークンを受け取ったとき）に使う専用ヘルパ
@@ -96,7 +129,6 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   if (!r.ok) {
     const t = await r.text().catch(() => '');
     throw new Error(`login_failed:${r.status}:${t}`);
-    // note: ここでは throw で十分。呼び出し元で UI エラー表示してください
   }
 
   const j = await r.json().catch(() => ({}));
@@ -107,12 +139,11 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   return at;
 }
 
-// src/api.ts内の最後あたりに追加
-
+// src/api.ts内の最後あたりに追加（既存維持）
 export async function getGroupByToken(token: string) {
-  const base = import.meta.env.VITE_API_BASE_URL as string;
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string;
 
-  const res = await fetch(`${base}/groups/${token}`, {
+  const res = await fetch(`${baseUrl}/groups/${token}`, {
     method: "GET",
     credentials: "include"
   });
