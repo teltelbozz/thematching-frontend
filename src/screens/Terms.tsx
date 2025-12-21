@@ -117,6 +117,8 @@ export default function Terms() {
     overflow: 'auto',
     whiteSpace: 'pre-wrap',
     lineHeight: 1.5,
+    color: '#111',
+    opacity: 1,
   };
 
   return (
