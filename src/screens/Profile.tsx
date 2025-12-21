@@ -1,5 +1,6 @@
 // src/screens/Profile.tsx
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getProfile, saveProfile } from '../api';
 
 type Profile = {
@@ -17,6 +18,9 @@ type Profile = {
 };
 
 export default function ProfileScreen() {
+  const nav = useNavigate();
+  const loc = useLocation();
+
   const [form, setForm] = useState<Profile>({
     nickname: '',
     age: undefined,
@@ -34,7 +38,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // 成功トーストは3秒で自動消滅
+  // 成功トーストは3秒で自動消滅（ただし今回は遷移するので基本見えません）
   useEffect(() => {
     if (msg === '保存しました。') {
       const t = setTimeout(() => setMsg(null), 3000);
@@ -75,6 +79,8 @@ export default function ProfileScreen() {
   }
 
   async function onSave() {
+    if (saving) return;
+
     setSaving(true);
     setMsg(null);
     try {
@@ -90,8 +96,12 @@ export default function ProfileScreen() {
             ? undefined
             : Number(form.income),
       };
+
       await saveProfile(payload);
-      setMsg('保存しました。'); // ← 成功トースト
+
+      // ✅ 保存後は Setup へ遷移（?r=... があれば引き継ぐ）
+      nav(`/setup${loc.search || ''}`, { replace: true });
+      return;
     } catch (e) {
       console.error('[Profile] save failed', e);
       setMsg('保存に失敗しました。'); // ← エラーは自動消滅しない
@@ -249,25 +259,10 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* エラーは従来表示（自動で消えない） */}
       {isError && (
         <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
       )}
 
-      {/* 成功トースト（自動で3秒で消える） */}
-      {msg === '保存しました。' && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50"
-        >
-          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
-            保存しました
-          </div>
-        </div>
-      )}
-
-      {/* 固定フッター風ボタン */}
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
           className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
