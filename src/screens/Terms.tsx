@@ -189,7 +189,7 @@ export default function Terms() {
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span style={{ color: '#111' }}>上記の利用規約に同意します</span>
+              <span style={{ color: '#fbf7f7ff' }}>上記の利用規約に同意します</span>
             </label>
 
             <button
@@ -206,10 +206,6 @@ export default function Terms() {
             >
               {posting ? 'Submitting...' : '同意して次へ'}
             </button>
-
-            <span style={{ color: '#666', fontSize: 12 }}>
-              ※ 同意が必要な場合のみ表示されます
-            </span>
           </div>
         </>
       )}
