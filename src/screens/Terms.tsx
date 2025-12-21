@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { acceptTerms, getCurrentTerms, getMe, getTermsStatus } from '../api';
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 export default function Terms() {
@@ -67,7 +70,9 @@ export default function Terms() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [nav, requestedPath]);
 
   function fmt(iso: string) {
@@ -115,44 +120,76 @@ export default function Terms() {
     background: '#fff',
     height: '55vh',
     overflow: 'auto',
-    whiteSpace: 'pre-wrap',
-    lineHeight: 1.5,
+    lineHeight: 1.6,
     color: '#111',
-    opacity: 1,
   };
+
+  // Markdown内の見た目を少し整える（h1/h2/段落/リスト）
+  const mdComponents = {
+    h1: (p: any) => <h1 style={{ fontSize: 22, margin: '6px 0 12px' }} {...p} />,
+    h2: (p: any) => <h2 style={{ fontSize: 18, margin: '18px 0 10px' }} {...p} />,
+    h3: (p: any) => <h3 style={{ fontSize: 16, margin: '16px 0 8px' }} {...p} />,
+    p: (p: any) => <p style={{ margin: '10px 0' }} {...p} />,
+    ul: (p: any) => <ul style={{ margin: '10px 0', paddingLeft: 20 }} {...p} />,
+    ol: (p: any) => <ol style={{ margin: '10px 0', paddingLeft: 20 }} {...p} />,
+    li: (p: any) => <li style={{ margin: '6px 0' }} {...p} />,
+    hr: (p: any) => <hr style={{ border: 0, borderTop: '1px solid #eee', margin: '14px 0' }} {...p} />,
+    blockquote: (p: any) => (
+      <blockquote
+        style={{
+          margin: '12px 0',
+          padding: '8px 10px',
+          borderLeft: '4px solid #ddd',
+          color: '#333',
+          background: '#fafafa',
+        }}
+        {...p}
+      />
+    ),
+  } as const;
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
       <h2 style={{ margin: '8px 0 6px' }}>{title}</h2>
       <div style={{ color: '#666', fontSize: 12, marginBottom: 10 }}>
-        {version ? <>version: <b>{version}</b>　</> : null}
+        {version ? (
+          <>
+            version: <b>{version}</b>　
+          </>
+        ) : null}
         {effectiveAt ? <>effective: {fmt(effectiveAt)}</> : null}
       </div>
 
-      {state === 'loading' && (
-        <div style={{ color: '#666' }}>loading...</div>
-      )}
+      {state === 'loading' && <div style={{ color: '#666' }}>loading...</div>}
 
       {state === 'error' && (
-        <div style={{ color: '#b00020' }}>
-          terms load error: {err}
-        </div>
+        <div style={{ color: '#b00020' }}>terms load error: {err}</div>
       )}
 
       {state === 'ready' && (
         <>
           <div style={boxStyle}>
-            {body || '（利用規約本文が未設定です）'}
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents as any}>
+              {body || '（利用規約本文が未設定です）'}
+            </ReactMarkdown>
           </div>
 
-          <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              marginTop: 12,
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span>上記の利用規約に同意します</span>
+              <span style={{ color: '#111' }}>上記の利用規約に同意します</span>
             </label>
 
             <button
@@ -164,7 +201,7 @@ export default function Terms() {
                 border: '1px solid #0070f3',
                 background: posting ? '#9cc5ff' : '#0070f3',
                 color: '#fff',
-                cursor: (!checked || posting) ? 'not-allowed' : 'pointer',
+                cursor: !checked || posting ? 'not-allowed' : 'pointer',
               }}
             >
               {posting ? 'Submitting...' : '同意して次へ'}
