@@ -1,6 +1,8 @@
 // src/screens/Profile.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getProfile, saveProfile } from '../api';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { closeLiffWindowSafe } from '../liff';
 
 type Profile = {
   nickname?: string | null;
@@ -17,6 +19,9 @@ type Profile = {
 };
 
 export default function ProfileScreen() {
+  const nav = useNavigate();
+  const loc = useLocation();
+
   const [form, setForm] = useState<Profile>({
     nickname: '',
     age: undefined,
@@ -34,6 +39,16 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const { requestedPath, doneMode } = useMemo(() => {
+    const params = new URLSearchParams(loc.search);
+    const r = params.get('r');
+    const done = params.get('done'); // "close" を想定
+    return {
+      requestedPath: r && r.startsWith('/') ? r : '/',
+      doneMode: done || '',
+    };
+  }, [loc.search]);
+
   // 成功トーストは3秒で自動消滅
   useEffect(() => {
     if (msg === '保存しました。') {
@@ -46,7 +61,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await getProfile(); // { profile: {...} }
+        const r = await getProfile();
         const p = (r?.profile || {}) as any;
         setForm({
           nickname: p.nickname ?? '',
@@ -78,7 +93,6 @@ export default function ProfileScreen() {
     setSaving(true);
     setMsg(null);
     try {
-      // age と income は数値に整形（空なら undefined）
       const payload: any = {
         ...form,
         age:
@@ -93,11 +107,20 @@ export default function ProfileScreen() {
 
       await saveProfile(payload);
 
-      // ✅ ここで遷移しない（元通り）
+      // ✅ オンボーディング：保存したら閉じる
+      if (doneMode === 'close') {
+        const closed = closeLiffWindowSafe();
+        if (!closed) {
+          nav(requestedPath || '/', { replace: true });
+        }
+        return;
+      }
+
+      // 既存挙動：保存しましたトーストだけ出して画面に留まる
       setMsg('保存しました。');
     } catch (e) {
       console.error('[Profile] save failed', e);
-      setMsg('保存に失敗しました。'); // ← エラーは自動消滅しない
+      setMsg('保存に失敗しました。');
     } finally {
       setSaving(false);
     }
@@ -252,32 +275,25 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* エラーは従来表示（自動で消えない） */}
       {isError && (
         <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
       )}
 
-      {/* 成功トースト（自動で3秒で消える） */}
       {msg === '保存しました。' && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50"
-        >
+        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">
           <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
             保存しました
           </div>
         </div>
       )}
 
-      {/* 固定フッター風ボタン */}
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
           className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
           disabled={saving}
           onClick={onSave}
         >
-          {saving ? '保存中…' : '保存する'}
+          {saving ? '保存中…' : '保存して次へ'}
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -20,19 +20,26 @@ import Account from './screens/Account';
 import MatchPrefs from './screens/MatchPrefs';
 import Setup from './screens/Setup';
 import GroupPage from './screens/GroupPage';
-import Terms from './screens/Terms'; // ★ 追加
+import Terms from './screens/Terms';
 
-// ---- 起動・認証・ディープリンク処理をまとめて担当 ----
 function BootRouter() {
   const navigate = useNavigate();
   const location = useLocation();
   const routedOnce = useRef(false);
 
+  const { requestedPath, isOnboardingEntry } = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const r = params.get('r');
+    const rp = r && r.startsWith('/') ? r : '/';
+    // r が無い = 公式チャンネルから “とりあえず開いた” ケースをオンボーディング扱い
+    const onboarding = !r;
+    return { requestedPath: rp, isOnboardingEntry: onboarding };
+  }, [location.search]);
+
   // 1) LIFF 初期化（1回だけ）
   useEffect(() => {
     initLiff().catch((e) => {
       console.error('[boot] initLiff error', e);
-      // 起動エラーでもホームは見せる
       navigate('/', { replace: true });
     });
   }, [navigate]);
@@ -42,7 +49,7 @@ function BootRouter() {
     let cancelled = false;
 
     (async () => {
-      await whenAuthReady(); // /auth/login 完了まで待機
+      await whenAuthReady();
 
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
@@ -50,42 +57,47 @@ function BootRouter() {
       try {
         const token = getAccessToken();
         if (!token) {
-          // 通常は whenAuthReady 後は入っている想定だが保険
+          // 念のため：トークンが取れないならプロフィールへ
           navigate('/profile', { replace: true });
           return;
         }
 
-        // deep link: 例 https://.../?r=%2Fsolo
-        const params = new URLSearchParams(location.search);
-        const requested = params.get('r');
-        const requestedPath =
-          requested && requested.startsWith('/') ? requested : '/';
-
-        // ① まず /me で登録状態を見る（既存仕様）
-        const me = await getMe(); // { userId, hasProfile, gender? }
-
-        // ② terms 同意状態チェック（★追加）
-        //    未同意なら /terms に飛ばして、同意後に requestedPath へ戻す
+        const me = await getMe(); // { userId, hasProfile, ... }
         const ts = await getTermsStatus().catch((e) => {
-          // terms API が未実装/一時不調でもアプリが死なないように「同意済み扱いで続行」
           console.warn('[boot] getTermsStatus failed (skip terms gating):', e);
           return { ok: true, accepted: true };
         });
 
+        // オンボーディング時の「完了後の行き先」
+        const onboardingDonePath = '/profile?done=close';
+
+        // ① 規約が未同意なら Terms へ
         if (!ts?.accepted) {
-          // Terms画面へ（同意後に戻る先を r で渡す）
-          navigate(`/terms?r=${encodeURIComponent(requestedPath)}`, { replace: true });
+          const back =
+            isOnboardingEntry
+              ? onboardingDonePath
+              : requestedPath; // deep link の時は戻す
+          navigate(`/terms?r=${encodeURIComponent(back)}`, { replace: true });
           return;
         }
 
-        // ③ プロフィール未完なら profile へ（既存仕様）
+        // ② プロフィール未完なら profile へ
         if (!me?.hasProfile) {
-          navigate('/profile', { replace: true });
+          if (isOnboardingEntry) {
+            navigate(onboardingDonePath, { replace: true });
+          } else {
+            // deep link の場合は、完了後に requestedPath へ戻せるよう r を渡す
+            navigate(`/profile?r=${encodeURIComponent(requestedPath)}`, {
+              replace: true,
+            });
+          }
           return;
         }
 
-        // ④ 登録済みなら r があれば r へ、無ければホームへ
-        navigate(requestedPath, { replace: true });
+        // ③ 登録済み
+        // - オンボーディング起点なら通常ホームへ（ここで閉じる挙動にはしない）
+        // - deep link 起点なら requestedPath へ
+        navigate(isOnboardingEntry ? '/' : requestedPath, { replace: true });
       } catch (e) {
         console.warn('[boot] boot check failed, go /profile', e);
         navigate('/profile', { replace: true });
@@ -95,7 +107,7 @@ function BootRouter() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, location.search]);
+  }, [navigate, requestedPath, isOnboardingEntry]);
 
   return null;
 }
@@ -103,31 +115,27 @@ function BootRouter() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* 起動時の副作用（LIFF init / 認証完了待ち / deep link 遷移） */}
       <BootRouter />
 
-      {/* 画面定義 */}
       <Routes>
         <Route path="/" element={<Home />} />
 
-        {/* ★ 利用規約同意（画面内表示） */}
+        {/* 利用規約同意 */}
         <Route path="/terms" element={<Terms />} />
 
-        {/* プロフィール登録フロー */}
+        {/* プロフィール登録 */}
         <Route path="/profile" element={<ProfileSetup />} />
 
-        {/* マイページとその配下 */}
+        {/* マイページ */}
         <Route path="/mypage" element={<MyPage />} />
         <Route path="/mypage/preferences" element={<MatchPrefs />} />
         <Route path="/mypage/faq" element={<Faq />} />
         <Route path="/mypage/invite" element={<Invite />} />
         <Route path="/mypage/account" element={<Account />} />
 
-        {/* リッチメニュー A/B 導線 */}
+        {/* リッチメニュー導線 */}
         <Route path="/solo" element={<Setup defaultMode="solo" />} />
         <Route path="/friends" element={<Setup defaultMode="friends" />} />
-
-        {/* 既存導線の互換 */}
         <Route path="/setup" element={<Setup />} />
 
         {/* グループページ */}

@@ -6,13 +6,19 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
 
 let _resolve!: () => void;
 const authReady = new Promise<void>((r) => (_resolve = r));
-export function whenAuthReady() { return authReady; }
+export function whenAuthReady() {
+  return authReady;
+}
 
 const KEY = 'liff_login_in_progress';
 
 // --- login-loop guard helpers ---
-function mark()  { sessionStorage.setItem(KEY, String(Date.now())); }
-function clear() { sessionStorage.removeItem(KEY); }
+function mark() {
+  sessionStorage.setItem(KEY, String(Date.now()));
+}
+function clearMark() {
+  sessionStorage.removeItem(KEY);
+}
 function looping(withinMs = 60_000) {
   const t = Number(sessionStorage.getItem(KEY) || 0);
   return !!t && Date.now() - t < withinMs;
@@ -44,13 +50,36 @@ function isIdTokenExpiringOrExpired(idToken: string, skewMs = 30_000) {
   }
 }
 
+// --- LIFF env helpers ---
+export function isInLiff() {
+  try {
+    return !!liff.isInClient?.();
+  } catch {
+    return false;
+  }
+}
+
+// LIFF内なら閉じる。閉じられない環境では false
+export function closeLiffWindowSafe(): boolean {
+  try {
+    if (isInLiff()) {
+      liff.closeWindow();
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 // --- idempotent init guard ---
 let initStarted = false;
 let initFinished = false;
 
 export async function initLiff() {
-  if (initFinished) return;                // すでに完了済み
-  if (initStarted) {                       // 進行中なら待つだけ
+  if (initFinished) return; // すでに完了済み
+  if (initStarted) {
+    // 進行中なら待つだけ
     await whenAuthReady();
     return;
   }
@@ -66,17 +95,16 @@ export async function initLiff() {
     if (!liff.isLoggedIn?.()) {
       if (looping()) {
         console.warn('[liff] login loop detected (not logged in). resolve anyway.');
-        _resolve(); // ここで待ちを解放して画面が固まらないようにする
+        _resolve();
         return;
       }
       mark();
       await liff.login({ redirectUri: location.href });
-      return; // ここでリダイレクトして戻らない想定
+      return; // リダイレクトして戻らない想定
     }
 
     // id_token の鮮度確認（exp が近い/切れてる → 再ログイン）
-    let idt = liff.getIDToken();
-    console.log('[DEBUG] id_token =', idt);
+    const idt = liff.getIDToken();
     if (!idt || isIdTokenExpiringOrExpired(idt)) {
       if (looping()) {
         console.warn('[liff] login loop detected (stale id_token). resolve anyway.');
@@ -91,12 +119,12 @@ export async function initLiff() {
     // サーバログイン（アクセストークン取得）
     await serverLoginWithIdToken(idt);
 
-    clear();
+    clearMark();
     initFinished = true;
     _resolve();
   } catch (e) {
     console.error('[liff] init error:', e);
-    // 失敗しても画面がいつまでも「起動中…」にならないよう解放する
+    // 失敗しても画面が固まらないよう解放
     _resolve();
   }
 }

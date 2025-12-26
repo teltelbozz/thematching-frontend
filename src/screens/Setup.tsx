@@ -36,8 +36,31 @@ function getNextTwoWeeksFriSatSlots(now = new Date()): CandidateSlot[] {
 function isPastDeadline(slot: CandidateSlot, now = new Date()): boolean {
   const slotDt = new Date(`${slot.date}T${slot.time}:00+09:00`);
   const deadline = new Date(slotDt.getTime() - 2 * 24 * 60 * 60 * 1000);
-  deadline.setHours(20, 0, 0, 0); // 2日前 20:00 JST
+  deadline.setHours(20, 0, 0, 0);
   return now.getTime() > deadline.getTime();
+}
+
+function inferNeedsKyc(me: any): boolean {
+  // いろいろな実装揺れを吸収（無ければ false 扱い = ブロックしない）
+  if (!me || typeof me !== 'object') return false;
+
+  // 明示フラグ系
+  if (me.needsKyc === true) return true;
+  if (me.needsKycVerification === true) return true;
+  if (me.kycRequired === true) return true;
+
+  // 完了フラグ系
+  if (me.kycCompleted === false) return true;
+  if (me.isKycVerified === false) return true;
+
+  // ステータス系
+  const st = me.kycStatus;
+  if (typeof st === 'string' && st) {
+    const s = st.toLowerCase();
+    if (s !== 'approved' && s !== 'verified' && s !== 'completed') return true;
+  }
+
+  return false;
 }
 
 export default function Setup({ defaultMode }: Props) {
@@ -46,20 +69,18 @@ export default function Setup({ defaultMode }: Props) {
   const [saving, setSaving] = useState(false);
   const [gender, setGender] = useState<'male' | 'female' | 'unknown'>('unknown');
 
+  // 保存ガード表示用
+  const [gateMsg, setGateMsg] = useState<string>('');
+
   // 入力モデル
-  const [typeMode, setTypeMode] =
-    useState<SetupDTO['type_mode']>('wine_talk');
+  const [typeMode, setTypeMode] = useState<SetupDTO['type_mode']>('wine_talk');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [cost, setCost] =
-    useState<SetupDTO['cost_pref']>('men_pay_all');
+  const [cost, setCost] = useState<SetupDTO['cost_pref']>('men_pay_all');
 
   // 見た目統一（v2.6は固定運用）
-  const [venueUi, setVenueUi] =
-    useState<'service_fixed'>('service_fixed');
-  const [locationUi, setLocationUi] =
-    useState<'shibuya_shinjuku'>('shibuya_shinjuku');
+  const [venueUi, setVenueUi] = useState<'service_fixed'>('service_fixed');
+  const [locationUi, setLocationUi] = useState<'shibuya_shinjuku'>('shibuya_shinjuku');
 
-  // ルート別デフォルト
   useEffect(() => {
     if (defaultMode === 'friends') {
       // 参加形態の差分を将来ここで扱う
@@ -70,7 +91,7 @@ export default function Setup({ defaultMode }: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const r = await getMe(); // { userId, gender? }
+        const r = await getMe();
         const g = (r?.gender as any) || 'unknown';
         setGender(g === 'male' || g === 'female' ? g : 'unknown');
       } catch {
@@ -84,18 +105,19 @@ export default function Setup({ defaultMode }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const r = await getSetup(); // { setup: SetupDTO | null }
+        const r = await getSetup();
         if (r?.setup) {
           const s: SetupDTO = r.setup;
           setTypeMode(s.type_mode ?? 'wine_talk');
+
           const map: Record<string, boolean> = {};
           for (const sl of s.candidate_slots || []) {
             map[`${sl.date} ${sl.time}`] = true;
           }
           setSelected(map);
+
           if (s.cost_pref) setCost(s.cost_pref);
           if (s.location) setLocationUi(s.location);
-          // venue_pref は v2.6 固定
         }
       } catch (e) {
         console.warn('[setup] load failed', e);
@@ -112,14 +134,40 @@ export default function Setup({ defaultMode }: Props) {
   );
 
   const toggle = (key: string, sl?: CandidateSlot) => {
-    if (sl && isPastDeadline(sl)) return; // ガード
+    if (sl && isPastDeadline(sl)) return;
     setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   async function onSave() {
     if (saving) return;
-    if (selectedCount < 1)
-      return alert('少なくとも1枠を選択してください。');
+    setGateMsg('');
+
+    if (selectedCount < 1) {
+      alert('少なくとも1枠を選択してください。');
+      return;
+    }
+
+    // ✅ 保存直前に /me でガード（デグレしないように “無い情報はブロックしない” 方針）
+    try {
+      const me = await getMe().catch(() => null);
+
+      if (!me?.hasProfile) {
+        const m = 'ユーザ登録してください（プロフィール登録が未完了です）';
+        setGateMsg(m);
+        alert(m);
+        return;
+      }
+
+      const needsKyc = inferNeedsKyc(me);
+      if (needsKyc) {
+        const m = '本人確認を完了してください（KYC未完了のため保存できません）';
+        setGateMsg(m);
+        alert(m);
+        return;
+      }
+    } catch {
+      // ここで失敗しても保存自体を止めない（安全側＝デグレ回避）
+    }
 
     setSaving(true);
     try {
@@ -129,20 +177,18 @@ export default function Setup({ defaultMode }: Props) {
           const [date, time] = k.split(' ');
           return { date, time: time as '19:00' | '21:00' };
         })
-        // 重複排除
         .reduce((acc, cur) => {
           const key = `${cur.date} ${cur.time}`;
           if (!acc.some((x) => `${x.date} ${x.time}` === key)) acc.push(cur);
           return acc;
         }, [] as CandidateSlot[])
-        // 並び順固定
         .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 
       const payload: SetupDTO = {
         type_mode: typeMode,
         candidate_slots,
-        location: locationUi, // v2.6では固定
-        venue_pref: null, // v2.6は固定
+        location: locationUi,
+        venue_pref: null,
         cost_pref: cost,
       };
 
@@ -150,22 +196,24 @@ export default function Setup({ defaultMode }: Props) {
       alert('保存しました');
       nav('/mypage');
     } catch (e: any) {
-      const msg = (e?.message ?? 'unknown error').replace(
-        'failed:',
-        'サーバエラー:'
-      );
+      const msg = (e?.message ?? 'unknown error').replace('failed:', 'サーバエラー:');
       alert('保存に失敗しました: ' + msg);
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading)
-    return <div className="p-6 text-gray-600">読み込み中…</div>;
+  if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
   return (
     <div className="max-w-screen-sm mx-auto p-4 space-y-6 bg-white text-gray-900">
       <h1 className="text-xl font-semibold">合コンの条件を入力</h1>
+
+      {!!gateMsg && (
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+          {gateMsg}
+        </div>
+      )}
 
       {/* 会のタイプ */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
@@ -192,7 +240,7 @@ export default function Setup({ defaultMode }: Props) {
         </div>
       </section>
 
-      {/* 日時（当週・次週の金/土 × 19:00/21:00） */}
+      {/* 日時 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">参加できる日時（複数選択可）</div>
         <div className="grid grid-cols-2 gap-2">
@@ -208,37 +256,23 @@ export default function Setup({ defaultMode }: Props) {
                 aria-pressed={active}
                 className={[
                   'h-12 rounded-lg border text-sm px-3 text-left',
-                  active
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-gray-900 border-gray-300',
-                  disabled
-                    ? 'opacity-40 cursor-not-allowed'
-                    : 'hover:ring-2 hover:ring-black/10',
+                  active ? 'bg-black text-white border-black' : 'bg-white text-gray-900 border-gray-300',
+                  disabled ? 'opacity-40 cursor-not-allowed' : 'hover:ring-2 hover:ring-black/10',
                 ].join(' ')}
-                title={
-                  disabled ? '締切（2日前20:00）を過ぎています' : ''
-                }
+                title={disabled ? '締切（2日前20:00）を過ぎています' : ''}
               >
                 <div className="font-medium">
-                  {sl.date}（
-                  {
-                    '日月火水木金土'[
-                      new Date(`${sl.date}T00:00:00+09:00`).getDay()
-                    ]
-                  }
-                  ）
+                  {sl.date}（{'日月火水木金土'[new Date(`${sl.date}T00:00:00+09:00`).getDay()]}）
                 </div>
                 <div>{sl.time} 開始</div>
               </button>
             );
           })}
         </div>
-        <div className="text-right text-sm text-gray-500">
-          ※ 締切：各枠の2日前 20:00
-        </div>
+        <div className="text-right text-sm text-gray-500">※ 締切：各枠の2日前 20:00</div>
       </section>
 
-      {/* 費用方針（性別で選択肢が異なる） */}
+      {/* 費用 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">費用の方針</div>
         <div className="grid grid-cols-1 gap-3">
@@ -278,7 +312,7 @@ export default function Setup({ defaultMode }: Props) {
         </div>
       </section>
 
-      {/* お店の希望（ラジオ1択） */}
+      {/* お店 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">お店の希望</div>
         <label className="flex items-center gap-3 text-gray-800">
@@ -290,12 +324,10 @@ export default function Setup({ defaultMode }: Props) {
           />
           <span>サービス側で指定</span>
         </label>
-        <div className="text-xs text-gray-500">
-          ※ v2.6では固定運用。将来選択式に拡張予定。
-        </div>
+        <div className="text-xs text-gray-500">※ v2.6では固定運用。将来選択式に拡張予定。</div>
       </section>
 
-      {/* 場所（ラジオ1択） */}
+      {/* 場所 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">場所</div>
         <label className="flex items-center gap-3 text-gray-800">
