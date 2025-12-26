@@ -1,6 +1,5 @@
 // src/screens/Profile.tsx
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getProfile, saveProfile } from '../api';
 
 type Profile = {
@@ -18,8 +17,6 @@ type Profile = {
 };
 
 export default function ProfileScreen() {
-  const nav = useNavigate();
-
   const [form, setForm] = useState<Profile>({
     nickname: '',
     age: undefined,
@@ -37,7 +34,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // 成功トーストは3秒で自動消滅（※今回は成功時に遷移するので基本表示されません）
+  // 成功トーストは3秒で自動消滅
   useEffect(() => {
     if (msg === '保存しました。') {
       const t = setTimeout(() => setMsg(null), 3000);
@@ -78,8 +75,6 @@ export default function ProfileScreen() {
   }
 
   async function onSave() {
-    if (saving) return;
-
     setSaving(true);
     setMsg(null);
     try {
@@ -98,11 +93,11 @@ export default function ProfileScreen() {
 
       await saveProfile(payload);
 
-      // ★ 保存できたら合コン条件入力へ遷移
-      nav('/setup', { replace: true });
+      // ✅ ここで遷移しない（元通り）
+      setMsg('保存しました。');
     } catch (e) {
       console.error('[Profile] save failed', e);
-      setMsg('保存に失敗しました。');
+      setMsg('保存に失敗しました。'); // ← エラーは自動消滅しない
     } finally {
       setSaving(false);
     }
@@ -262,6 +257,19 @@ export default function ProfileScreen() {
         <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
       )}
 
+      {/* 成功トースト（自動で3秒で消える） */}
+      {msg === '保存しました。' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50"
+        >
+          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
+            保存しました
+          </div>
+        </div>
+      )}
+
       {/* 固定フッター風ボタン */}
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
@@ -269,7 +277,7 @@ export default function ProfileScreen() {
           disabled={saving}
           onClick={onSave}
         >
-          {saving ? '保存中…' : '保存して次へ'}
+          {saving ? '保存中…' : '保存する'}
         </button>
       </div>
     </div>
