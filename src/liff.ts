@@ -6,19 +6,13 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
 
 let _resolve!: () => void;
 const authReady = new Promise<void>((r) => (_resolve = r));
-export function whenAuthReady() {
-  return authReady;
-}
+export function whenAuthReady() { return authReady; }
 
 const KEY = 'liff_login_in_progress';
 
 // --- login-loop guard helpers ---
-function mark() {
-  sessionStorage.setItem(KEY, String(Date.now()));
-}
-function clearMark() {
-  sessionStorage.removeItem(KEY);
-}
+function mark()  { sessionStorage.setItem(KEY, String(Date.now())); }
+function clear() { sessionStorage.removeItem(KEY); }
 function looping(withinMs = 60_000) {
   const t = Number(sessionStorage.getItem(KEY) || 0);
   return !!t && Date.now() - t < withinMs;
@@ -50,36 +44,13 @@ function isIdTokenExpiringOrExpired(idToken: string, skewMs = 30_000) {
   }
 }
 
-// --- LIFF env helpers ---
-export function isInLiff() {
-  try {
-    return !!liff.isInClient?.();
-  } catch {
-    return false;
-  }
-}
-
-// LIFF内なら閉じる。閉じられない環境では false
-export function closeLiffWindowSafe(): boolean {
-  try {
-    if (isInLiff()) {
-      liff.closeWindow();
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-  return false;
-}
-
 // --- idempotent init guard ---
 let initStarted = false;
 let initFinished = false;
 
 export async function initLiff() {
-  if (initFinished) return; // すでに完了済み
-  if (initStarted) {
-    // 進行中なら待つだけ
+  if (initFinished) return;                // すでに完了済み
+  if (initStarted) {                       // 進行中なら待つだけ
     await whenAuthReady();
     return;
   }
@@ -100,7 +71,7 @@ export async function initLiff() {
       }
       mark();
       await liff.login({ redirectUri: location.href });
-      return; // リダイレクトして戻らない想定
+      return; // リダイレクトで戻らない想定
     }
 
     // id_token の鮮度確認（exp が近い/切れてる → 再ログイン）
@@ -119,12 +90,28 @@ export async function initLiff() {
     // サーバログイン（アクセストークン取得）
     await serverLoginWithIdToken(idt);
 
-    clearMark();
+    clear();
     initFinished = true;
     _resolve();
   } catch (e) {
     console.error('[liff] init error:', e);
-    // 失敗しても画面が固まらないよう解放
     _resolve();
   }
+}
+
+/**
+ * LIFF内ならウィンドウを閉じる（閉じられたら true）
+ * - ブラウザ等では false を返す（例外は握りつぶす）
+ */
+export function closeLiffWindowSafe(): boolean {
+  try {
+    // isInClient() は LIFF内判定として使える
+    if ((liff as any).isInClient?.()) {
+      (liff as any).closeWindow?.();
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 }
