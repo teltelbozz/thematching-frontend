@@ -44,13 +44,9 @@ export default function Terms() {
 
         if (st?.accepted) {
           setAcceptedAlready(true);
-          // すでに同意済みなら、Profile状態に応じて適切な場所へ
           const me = await getMe().catch(() => null);
-          if (!me?.hasProfile) {
-            nav('/profile', { replace: true });
-          } else {
-            nav(requestedPath, { replace: true });
-          }
+          if (!me?.hasProfile) nav('/profile', { replace: true });
+          else nav(requestedPath, { replace: true });
           return;
         }
 
@@ -94,18 +90,13 @@ export default function Terms() {
     setPosting(true);
     try {
       await acceptTerms({
-        // termsId / version はバックエンド設計に合わせてどちらでも良いように“両対応”
         version: version || undefined,
         userAgent: navigator.userAgent,
       });
 
-      // 同意後：プロフィール未設定なら /profile、設定済みなら r に戻す
       const me = await getMe().catch(() => null);
-      if (!me?.hasProfile) {
-        nav('/profile', { replace: true });
-      } else {
-        nav(requestedPath, { replace: true });
-      }
+      if (!me?.hasProfile) nav('/profile', { replace: true });
+      else nav(requestedPath, { replace: true });
     } catch (e: any) {
       alert(e?.message || String(e));
     } finally {
@@ -124,7 +115,6 @@ export default function Terms() {
     color: '#111',
   };
 
-  // Markdown内の見た目を少し整える（h1/h2/段落/リスト）
   const mdComponents = {
     h1: (p: any) => <h1 style={{ fontSize: 22, margin: '6px 0 12px' }} {...p} />,
     h2: (p: any) => <h2 style={{ fontSize: 18, margin: '18px 0 10px' }} {...p} />,
@@ -152,19 +142,12 @@ export default function Terms() {
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
       <h2 style={{ margin: '8px 0 6px' }}>{title}</h2>
       <div style={{ color: '#666', fontSize: 12, marginBottom: 10 }}>
-        {version ? (
-          <>
-            version: <b>{version}</b>　
-          </>
-        ) : null}
+        {version ? <>version: <b>{version}</b>　</> : null}
         {effectiveAt ? <>effective: {fmt(effectiveAt)}</> : null}
       </div>
 
       {state === 'loading' && <div style={{ color: '#666' }}>loading...</div>}
-
-      {state === 'error' && (
-        <div style={{ color: '#b00020' }}>terms load error: {err}</div>
-      )}
+      {state === 'error' && <div style={{ color: '#b00020' }}>terms load error: {err}</div>}
 
       {state === 'ready' && (
         <>
@@ -174,22 +157,14 @@ export default function Terms() {
             </ReactMarkdown>
           </div>
 
-          <div
-            style={{
-              marginTop: 12,
-              display: 'flex',
-              gap: 12,
-              alignItems: 'center',
-              flexWrap: 'wrap',
-            }}
-          >
+          <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span style={{ color: '#fbf7f7ff' }}>上記の利用規約に同意します</span>
+              <span style={{ color: '#111' }}>上記の利用規約に同意します</span>
             </label>
 
             <button
@@ -210,10 +185,7 @@ export default function Terms() {
         </>
       )}
 
-      {/* 念のため（同意済みでここに残るケースは基本ない） */}
-      {acceptedAlready && (
-        <div style={{ marginTop: 12, color: '#067d17' }}>accepted</div>
-      )}
+      {acceptedAlready && <div style={{ marginTop: 12, color: '#067d17' }}>accepted</div>}
     </div>
   );
 }

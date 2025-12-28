@@ -49,7 +49,6 @@ export default function ProfileScreen() {
     };
   }, [loc.search]);
 
-  // 成功トーストは3秒で自動消滅
   useEffect(() => {
     if (msg === '保存しました。') {
       const t = setTimeout(() => setMsg(null), 3000);
@@ -57,7 +56,6 @@ export default function ProfileScreen() {
     }
   }, [msg]);
 
-  // 初期ロード
   useEffect(() => {
     (async () => {
       try {
@@ -90,17 +88,19 @@ export default function ProfileScreen() {
   }
 
   async function onSave() {
+    if (saving) return;
     setSaving(true);
     setMsg(null);
+
     try {
       const payload: any = {
         ...form,
         age:
-          form.age === undefined || form.age === null || form.age === ('' as any)
+          form.age === undefined || form.age === null || (form.age as any) === ''
             ? undefined
             : Number(form.age),
         income:
-          form.income === undefined || form.income === null || form.income === ('' as any)
+          form.income === undefined || form.income === null || (form.income as any) === ''
             ? undefined
             : Number(form.income),
       };
@@ -110,13 +110,10 @@ export default function ProfileScreen() {
       // ✅ オンボーディング：保存したら閉じる
       if (doneMode === 'close') {
         const closed = closeLiffWindowSafe();
-        if (!closed) {
-          nav(requestedPath || '/', { replace: true });
-        }
+        if (!closed) nav(requestedPath || '/', { replace: true });
         return;
       }
 
-      // 既存挙動：保存しましたトーストだけ出して画面に留まる
       setMsg('保存しました。');
     } catch (e) {
       console.error('[Profile] save failed', e);
@@ -136,7 +133,6 @@ export default function ProfileScreen() {
         プロフィール登録
       </h1>
 
-      {/* カード: 基本情報 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5">
         <Field label="ニックネーム">
           <input
@@ -155,9 +151,7 @@ export default function ProfileScreen() {
               min={18}
               max={120}
               value={form.age ?? ''}
-              onChange={(e) =>
-                set('age', e.target.value === '' ? undefined : Number(e.target.value))
-              }
+              onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
               placeholder="例）28"
             />
           </Field>
@@ -177,7 +171,6 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* カード: 学歴・居住 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="学歴">
           <input
@@ -218,7 +211,6 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* カード: 詳細 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="職業">
           <input
@@ -251,9 +243,7 @@ export default function ProfileScreen() {
               type="number"
               min={0}
               value={form.income ?? ''}
-              onChange={(e) =>
-                set('income', e.target.value === '' ? undefined : Number(e.target.value))
-              }
+              onChange={(e) => set('income', e.target.value === '' ? undefined : Number(e.target.value))}
               placeholder="例）650"
             />
           </Field>
@@ -275,9 +265,7 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {isError && (
-        <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
-      )}
+      {isError && <div className="text-center text-sm text-red-600 mt-4">{msg}</div>}
 
       {msg === '保存しました。' && (
         <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getMe, getTermsStatus } from '../api';
 import { closeLiffWindowSafe } from '../liff';
 
-type LoadState = 'loading' | 'ready' | 'error';
+type LoadState = 'loading' | 'error';
 
 export default function Onboarding() {
   const nav = useNavigate();
@@ -19,7 +19,7 @@ export default function Onboarding() {
         setState('loading');
         setErr('');
 
-        // 1) terms同意チェック（未同意なら terms → 同意後 profile(close)へ）
+        // 1) terms同意チェック
         const ts = await getTermsStatus().catch(() => ({ ok: true, accepted: true }));
         if (cancelled) return;
 
@@ -41,16 +41,11 @@ export default function Onboarding() {
 
         // 3) 登録済み → 即 close（公式アカウントのトークへ戻る）
         const closed = closeLiffWindowSafe();
-        if (!closed) {
-          // ブラウザ等で閉じられない場合のフォールバック
-          nav('/', { replace: true });
-        }
+        if (!closed) nav('/', { replace: true });
       } catch (e: any) {
         if (cancelled) return;
         setErr(e?.message || String(e));
         setState('error');
-      } finally {
-        if (!cancelled) setState('ready');
       }
     })();
 
@@ -59,19 +54,12 @@ export default function Onboarding() {
     };
   }, [nav]);
 
-  if (state === 'loading') {
-    return <div className="p-6 text-gray-600">起動中…</div>;
-  }
+  if (state === 'loading') return <div className="p-6 text-gray-600">起動中…</div>;
 
-  if (state === 'error') {
-    return (
-      <div className="p-6">
-        <div className="text-red-600 font-semibold">Onboarding error</div>
-        <pre className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{err}</pre>
-      </div>
-    );
-  }
-
-  // 基本ここは一瞬で遷移/closeされる想定
-  return <div className="p-6 text-gray-600">準備中…</div>;
+  return (
+    <div className="p-6">
+      <div className="text-red-600 font-semibold">Onboarding error</div>
+      <pre className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{err}</pre>
+    </div>
+  );
 }

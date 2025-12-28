@@ -23,7 +23,6 @@ function b64urlToUtf8(input: string): string {
   let s = input.replace(/-/g, '+').replace(/_/g, '/');
   const pad = s.length % 4;
   if (pad) s += '='.repeat(4 - pad);
-  // atob → UTF-8 復元（escape/encode 併用）
   return decodeURIComponent(escape(atob(s)));
 }
 
@@ -49,8 +48,8 @@ let initStarted = false;
 let initFinished = false;
 
 export async function initLiff() {
-  if (initFinished) return;                // すでに完了済み
-  if (initStarted) {                       // 進行中なら待つだけ
+  if (initFinished) return;
+  if (initStarted) {
     await whenAuthReady();
     return;
   }
@@ -62,7 +61,6 @@ export async function initLiff() {
     await liff.init({ liffId: LIFF_ID });
     await liff.ready;
 
-    // 未ログイン → ログイン発火（1分以内の多重回避）
     if (!liff.isLoggedIn?.()) {
       if (looping()) {
         console.warn('[liff] login loop detected (not logged in). resolve anyway.');
@@ -71,10 +69,9 @@ export async function initLiff() {
       }
       mark();
       await liff.login({ redirectUri: location.href });
-      return; // リダイレクトで戻らない想定
+      return;
     }
 
-    // id_token の鮮度確認（exp が近い/切れてる → 再ログイン）
     const idt = liff.getIDToken();
     if (!idt || isIdTokenExpiringOrExpired(idt)) {
       if (looping()) {
@@ -87,7 +84,6 @@ export async function initLiff() {
       return;
     }
 
-    // サーバログイン（アクセストークン取得）
     await serverLoginWithIdToken(idt);
 
     clear();
@@ -101,11 +97,10 @@ export async function initLiff() {
 
 /**
  * LIFF内ならウィンドウを閉じる（閉じられたら true）
- * - ブラウザ等では false を返す（例外は握りつぶす）
+ * - ブラウザ等では false（例外は握りつぶす）
  */
 export function closeLiffWindowSafe(): boolean {
   try {
-    // isInClient() は LIFF内判定として使える
     if ((liff as any).isInClient?.()) {
       (liff as any).closeWindow?.();
       return true;

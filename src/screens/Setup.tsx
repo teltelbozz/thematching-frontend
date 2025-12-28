@@ -11,7 +11,6 @@ import { useNavigate } from 'react-router-dom';
 
 type Props = { defaultMode?: 'solo' | 'friends' };
 
-// 当週＋次週の金/土 × 19:00/21:00 を生成（JST前提）
 function getNextTwoWeeksFriSatSlots(now = new Date()): CandidateSlot[] {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const start = new Date(
@@ -32,7 +31,6 @@ function getNextTwoWeeksFriSatSlots(now = new Date()): CandidateSlot[] {
   return slots;
 }
 
-// 締切: スロット日時の 2日前 20:00 JST
 function isPastDeadline(slot: CandidateSlot, now = new Date()): boolean {
   const slotDt = new Date(`${slot.date}T${slot.time}:00+09:00`);
   const deadline = new Date(slotDt.getTime() - 2 * 24 * 60 * 60 * 1000);
@@ -41,19 +39,15 @@ function isPastDeadline(slot: CandidateSlot, now = new Date()): boolean {
 }
 
 function inferNeedsKyc(me: any): boolean {
-  // いろいろな実装揺れを吸収（無ければ false 扱い = ブロックしない）
   if (!me || typeof me !== 'object') return false;
 
-  // 明示フラグ系
   if (me.needsKyc === true) return true;
   if (me.needsKycVerification === true) return true;
   if (me.kycRequired === true) return true;
 
-  // 完了フラグ系
   if (me.kycCompleted === false) return true;
   if (me.isKycVerified === false) return true;
 
-  // ステータス系
   const st = me.kycStatus;
   if (typeof st === 'string' && st) {
     const s = st.toLowerCase();
@@ -69,15 +63,12 @@ export default function Setup({ defaultMode }: Props) {
   const [saving, setSaving] = useState(false);
   const [gender, setGender] = useState<'male' | 'female' | 'unknown'>('unknown');
 
-  // 保存ガード表示用
   const [gateMsg, setGateMsg] = useState<string>('');
 
-  // 入力モデル
   const [typeMode, setTypeMode] = useState<SetupDTO['type_mode']>('wine_talk');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [cost, setCost] = useState<SetupDTO['cost_pref']>('men_pay_all');
 
-  // 見た目統一（v2.6は固定運用）
   const [venueUi, setVenueUi] = useState<'service_fixed'>('service_fixed');
   const [locationUi, setLocationUi] = useState<'shibuya_shinjuku'>('shibuya_shinjuku');
 
@@ -87,7 +78,6 @@ export default function Setup({ defaultMode }: Props) {
     }
   }, [defaultMode]);
 
-  // 性別取得（費用選択肢の出し分けに使用）
   useEffect(() => {
     (async () => {
       try {
@@ -95,12 +85,11 @@ export default function Setup({ defaultMode }: Props) {
         const g = (r?.gender as any) || 'unknown';
         setGender(g === 'male' || g === 'female' ? g : 'unknown');
       } catch {
-        // 失敗しても画面は表示
+        // ignore
       }
     })();
   }, []);
 
-  // 既存設定のロード
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -147,7 +136,6 @@ export default function Setup({ defaultMode }: Props) {
       return;
     }
 
-    // ✅ 保存直前に /me でガード（デグレしないように “無い情報はブロックしない” 方針）
     try {
       const me = await getMe().catch(() => null);
 
@@ -166,7 +154,7 @@ export default function Setup({ defaultMode }: Props) {
         return;
       }
     } catch {
-      // ここで失敗しても保存自体を止めない（安全側＝デグレ回避）
+      // 失敗してもブロックしない（デグレ回避）
     }
 
     setSaving(true);
@@ -215,7 +203,6 @@ export default function Setup({ defaultMode }: Props) {
         </div>
       )}
 
-      {/* 会のタイプ */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">会のタイプ</div>
         <div className="grid grid-cols-1 gap-3">
@@ -240,7 +227,6 @@ export default function Setup({ defaultMode }: Props) {
         </div>
       </section>
 
-      {/* 日時 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">参加できる日時（複数選択可）</div>
         <div className="grid grid-cols-2 gap-2">
@@ -272,7 +258,6 @@ export default function Setup({ defaultMode }: Props) {
         <div className="text-right text-sm text-gray-500">※ 締切：各枠の2日前 20:00</div>
       </section>
 
-      {/* 費用 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">費用の方針</div>
         <div className="grid grid-cols-1 gap-3">
@@ -312,7 +297,6 @@ export default function Setup({ defaultMode }: Props) {
         </div>
       </section>
 
-      {/* お店 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">お店の希望</div>
         <label className="flex items-center gap-3 text-gray-800">
@@ -327,7 +311,6 @@ export default function Setup({ defaultMode }: Props) {
         <div className="text-xs text-gray-500">※ v2.6では固定運用。将来選択式に拡張予定。</div>
       </section>
 
-      {/* 場所 */}
       <section className="bg-white text-gray-900 rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 space-y-3">
         <div className="font-medium">場所</div>
         <label className="flex items-center gap-3 text-gray-800">

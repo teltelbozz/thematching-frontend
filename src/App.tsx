@@ -20,7 +20,7 @@ import MatchPrefs from './screens/MatchPrefs';
 import Setup from './screens/Setup';
 import GroupPage from './screens/GroupPage';
 import Terms from './screens/Terms';
-import Onboarding from './screens/Onboarding'; // ★追加
+import Onboarding from './screens/Onboarding';
 
 function BootRouter() {
   const navigate = useNavigate();
@@ -45,11 +45,9 @@ function BootRouter() {
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
 
-      // ★オンボーディング/規約/プロフィール画面は「画面側」で遷移制御するので BootRouter は触らない
+      // ★オンボーディング/規約/プロフィール画面は「画面側」で遷移制御する
       const p = location.pathname;
-      if (p === '/onboarding' || p === '/terms' || p === '/profile') {
-        return;
-      }
+      if (p === '/onboarding' || p === '/terms' || p === '/profile') return;
 
       try {
         const token = getAccessToken();
