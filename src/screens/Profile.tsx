@@ -1,6 +1,6 @@
 // src/screens/Profile.tsx
 import { useEffect, useMemo, useState } from 'react';
-import { getProfile, saveProfile } from '../api';
+import { getProfile, saveProfile, uploadProfilePhoto } from '../api';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { closeLiffWindowSafe } from '../liff';
 
@@ -16,6 +16,8 @@ type Profile = {
   personality?: string | null;
   income?: number | null;
   atmosphere?: string | null;
+  photo_url?: string | null;
+  photo_masked_url?: string | null;
 };
 
 export default function ProfileScreen() {
@@ -34,10 +36,16 @@ export default function ProfileScreen() {
     personality: '',
     income: undefined,
     atmosphere: '',
+    photo_url: null,
+    photo_masked_url: null,
   });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // 写真アップロード状態
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const { requestedPath, doneMode } = useMemo(() => {
     const params = new URLSearchParams(loc.search);
@@ -49,6 +57,7 @@ export default function ProfileScreen() {
     };
   }, [loc.search]);
 
+  // 成功トーストは3秒で自動消滅
   useEffect(() => {
     if (msg === '保存しました。') {
       const t = setTimeout(() => setMsg(null), 3000);
@@ -56,6 +65,7 @@ export default function ProfileScreen() {
     }
   }, [msg]);
 
+  // 初期ロード
   useEffect(() => {
     (async () => {
       try {
@@ -73,6 +83,8 @@ export default function ProfileScreen() {
           personality: p.personality ?? '',
           income: p.income ?? undefined,
           atmosphere: p.atmosphere ?? '',
+          photo_url: p.photo_url ?? null,
+          photo_masked_url: p.photo_masked_url ?? null,
         });
       } catch (e) {
         console.warn('[Profile] load failed', e);
@@ -87,20 +99,46 @@ export default function ProfileScreen() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function onSave() {
-    if (saving) return;
-    setSaving(true);
+  async function onPickPhoto(file: File | null) {
+    if (!file) return;
     setMsg(null);
 
+    // 軽いバリデーション
+    if (!file.type.startsWith('image/')) {
+      alert('画像ファイルを選択してください');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('画像サイズが大きすぎます（最大 5MB）');
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const r = await uploadProfilePhoto(file);
+      set('photo_url', r.photo_url);
+      set('photo_masked_url', r.photo_masked_url);
+      setMsg('保存しました。'); // 小さな成功通知（3秒で消える）
+    } catch (e: any) {
+      console.error('[Profile] photo upload failed', e);
+      alert(e?.message || '写真のアップロードに失敗しました');
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  async function onSave() {
+    setSaving(true);
+    setMsg(null);
     try {
       const payload: any = {
         ...form,
         age:
-          form.age === undefined || form.age === null || (form.age as any) === ''
+          form.age === undefined || form.age === null || form.age === ('' as any)
             ? undefined
             : Number(form.age),
         income:
-          form.income === undefined || form.income === null || (form.income as any) === ''
+          form.income === undefined || form.income === null || form.income === ('' as any)
             ? undefined
             : Number(form.income),
       };
@@ -110,7 +148,9 @@ export default function ProfileScreen() {
       // ✅ オンボーディング：保存したら閉じる
       if (doneMode === 'close') {
         const closed = closeLiffWindowSafe();
-        if (!closed) nav(requestedPath || '/', { replace: true });
+        if (!closed) {
+          nav(requestedPath || '/', { replace: true });
+        }
         return;
       }
 
@@ -124,7 +164,6 @@ export default function ProfileScreen() {
   }
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
-
   const isError = msg && msg.includes('失敗');
 
   return (
@@ -133,7 +172,43 @@ export default function ProfileScreen() {
         プロフィール登録
       </h1>
 
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5">
+      {/* 写真 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4">
+        <div className="text-sm font-medium text-gray-900">プロフィール写真</div>
+
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200">
+            {form.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.photo_url} alt="profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full grid place-items-center text-gray-400 text-xs">
+                NO PHOTO
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 space-y-2">
+            <input
+              type="file"
+              accept="image/*"
+              disabled={photoUploading}
+              onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-gray-700"
+            />
+            <div className="text-xs text-gray-500">
+              画像は最大 5MB。アップロード後、自動で保存されます。
+            </div>
+          </div>
+        </div>
+
+        {photoUploading && (
+          <div className="text-sm text-gray-600">写真をアップロード中…</div>
+        )}
+      </section>
+
+      {/* カード: 基本情報 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="ニックネーム">
           <input
             className="w-full h-11 border border-gray-300 rounded-lg px-3"
@@ -151,7 +226,9 @@ export default function ProfileScreen() {
               min={18}
               max={120}
               value={form.age ?? ''}
-              onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
+              onChange={(e) =>
+                set('age', e.target.value === '' ? undefined : Number(e.target.value))
+              }
               placeholder="例）28"
             />
           </Field>
@@ -171,6 +248,7 @@ export default function ProfileScreen() {
         </div>
       </section>
 
+      {/* カード: 学歴・居住 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="学歴">
           <input
@@ -211,6 +289,7 @@ export default function ProfileScreen() {
         </div>
       </section>
 
+      {/* カード: 詳細 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="職業">
           <input
@@ -243,7 +322,9 @@ export default function ProfileScreen() {
               type="number"
               min={0}
               value={form.income ?? ''}
-              onChange={(e) => set('income', e.target.value === '' ? undefined : Number(e.target.value))}
+              onChange={(e) =>
+                set('income', e.target.value === '' ? undefined : Number(e.target.value))
+              }
               placeholder="例）650"
             />
           </Field>
@@ -265,7 +346,9 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {isError && <div className="text-center text-sm text-red-600 mt-4">{msg}</div>}
+      {isError && (
+        <div className="text-center text-sm text-red-600 mt-4">{msg}</div>
+      )}
 
       {msg === '保存しました。' && (
         <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">

@@ -14,6 +14,7 @@ const API_BASE =
 
 if (!API_BASE) console.warn('[api] VITE_API_BASE_URL is not set');
 
+// API_BASE に末尾スラッシュがあっても安全に結合
 function base(path: string) {
   return API_BASE.replace(/\/+$/, '') + path;
 }
@@ -25,7 +26,7 @@ function isFormDataBody(body: any): body is FormData {
 async function doFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
 
-  // ★ FormData のときは Content-Type を自分で付けない（boundary が壊れる）
+  // ★重要：FormData の場合、Content-Type はブラウザに任せる（boundary が必要）
   if (!headers.has('Content-Type') && init.body && !isFormDataBody(init.body)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -38,11 +39,13 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
   let r = await doFetch(path, init);
   if (r.status !== 401) return r;
 
+  // 401 → refresh 試行
   const rr = await doFetch('/auth/refresh', { method: 'POST' });
   if (rr.ok) {
     const j = await rr.json().catch(() => ({}));
     const at = j?.accessToken ?? j?.access_token;
     if (at) setAccessToken(at);
+    // retry
     r = await doFetch(path, init);
   }
   return r;
@@ -64,13 +67,6 @@ export async function apiPostJson<T = any>(path: string, body: any): Promise<T> 
   return r.json();
 }
 
-// ★ 追加：multipart/form-data 用
-export async function apiPostForm<T = any>(path: string, form: FormData): Promise<T> {
-  const r = await apiFetch(path, { method: 'POST', body: form });
-  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
-  return r.json();
-}
-
 /* ===================== Domain Types ===================== */
 
 export type CandidateSlot = { date: string; time: '19:00'|'21:00' };
@@ -79,7 +75,7 @@ export type SetupDTO = {
   type_mode: 'wine_talk' | 'wine_and_others';
   candidate_slots: CandidateSlot[];
   location: 'shibuya_shinjuku';
-  venue_pref?: null;
+  venue_pref?: null; // v2.6 初期は固定
   cost_pref: 'men_pay_all' | 'split_even' | 'follow_partner';
 };
 
@@ -88,26 +84,28 @@ export type SetupDTO = {
 // me / profile
 export const getProfile = () => apiGetJson('/profile');
 export const saveProfile = (input: any) => apiPutJson('/profile', input);
-
-// ★ getMe は backend で verifiedAge を追加したので、画面側はそれも参照できる
 export const getMe = () => apiGetJson('/me');
 
-// setup
+// ★追加：プロフィール写真アップロード（multipart）
+export async function uploadProfilePhoto(file: File): Promise<{ ok: true; photo_url: string; photo_masked_url: string | null }> {
+  const fd = new FormData();
+  fd.append('photo', file);
+
+  const r = await apiFetch('/profile/photo', { method: 'POST', body: fd });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`/profile/photo failed: ${r.status} ${t}`);
+  }
+  return r.json();
+}
+
+// setup（型を付ける）
 export const getSetup = () => apiGetJson<{ setup: SetupDTO | null }>('/setup');
 export const saveSetup = (input: SetupDTO) => apiPutJson<{ setup: SetupDTO }>('/setup', input);
 
 // match-prefs
 export const getMatchPrefs = () => apiGetJson('/match-prefs');
 export const saveMatchPrefs = (payload: any) => apiPutJson('/match-prefs', payload);
-
-/* ===================== Photo Upload (NEW) ===================== */
-export type UploadPhotoResponse = { ok: true; photo_url: string; pathname: string };
-
-export async function uploadProfilePhoto(file: File): Promise<UploadPhotoResponse> {
-  const fd = new FormData();
-  fd.append('file', file);
-  return apiPostForm<UploadPhotoResponse>('/profile/photo', fd);
-}
 
 /* ===================== Terms (NEW) ===================== */
 export type TermsDoc = {
@@ -117,6 +115,7 @@ export type TermsDoc = {
   body_md: string;
   effective_at: string;
 };
+
 export type TermsCurrentResponse = { ok: true; terms: TermsDoc };
 export type TermsStatusResponse = {
   ok: true;
@@ -124,6 +123,7 @@ export type TermsStatusResponse = {
   currentVersion?: string;
   acceptedVersion?: string | null;
 };
+
 export const getCurrentTerms = () => apiGetJson<TermsCurrentResponse>('/terms/current');
 export const getTermsStatus = () => apiGetJson<TermsStatusResponse>('/terms/status');
 export const acceptTerms = (payload?: { termsId?: number; version?: string; userAgent?: string }) =>
