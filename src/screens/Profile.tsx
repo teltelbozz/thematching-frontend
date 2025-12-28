@@ -16,6 +16,8 @@ type Profile = {
   personality?: string | null;
   income?: number | null;
   atmosphere?: string | null;
+
+  // ★追加
   photo_url?: string | null;
   photo_masked_url?: string | null;
 };
@@ -44,8 +46,9 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // 写真アップロード状態
+  // ★写真UI状態
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoErr, setPhotoErr] = useState<string>('');
 
   const { requestedPath, doneMode } = useMemo(() => {
     const params = new URLSearchParams(loc.search);
@@ -101,27 +104,28 @@ export default function ProfileScreen() {
 
   async function onPickPhoto(file: File | null) {
     if (!file) return;
+    setPhotoErr('');
     setMsg(null);
 
-    // 軽いバリデーション
+    // ざっくりフロント側でも制限（最終的にはサーバでも弾いてる）
     if (!file.type.startsWith('image/')) {
-      alert('画像ファイルを選択してください');
+      setPhotoErr('画像ファイルを選択してください。');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert('画像サイズが大きすぎます（最大 5MB）');
+      setPhotoErr('画像サイズは最大 5MB です。');
       return;
     }
 
     setPhotoUploading(true);
     try {
-      const r = await uploadProfilePhoto(file);
-      set('photo_url', r.photo_url);
-      set('photo_masked_url', r.photo_masked_url);
-      setMsg('保存しました。'); // 小さな成功通知（3秒で消える）
+      // ✅ tmpへアップロード（DB保存はしない）
+      const up = await uploadProfilePhoto(file);
+      set('photo_url', up.url);
+      // maskedは後工程（KYC/審査など）想定のためここでは触らない
     } catch (e: any) {
       console.error('[Profile] photo upload failed', e);
-      alert(e?.message || '写真のアップロードに失敗しました');
+      setPhotoErr(e?.message || '写真アップロードに失敗しました。');
     } finally {
       setPhotoUploading(false);
     }
@@ -154,6 +158,7 @@ export default function ProfileScreen() {
         return;
       }
 
+      // 既存挙動：保存しましたトーストだけ出して画面に留まる
       setMsg('保存しました。');
     } catch (e) {
       console.error('[Profile] save failed', e);
@@ -164,6 +169,7 @@ export default function ProfileScreen() {
   }
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
+
   const isError = msg && msg.includes('失敗');
 
   return (
@@ -172,19 +178,20 @@ export default function ProfileScreen() {
         プロフィール登録
       </h1>
 
-      {/* 写真 */}
+      {/* ★ 写真 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4">
-        <div className="text-sm font-medium text-gray-900">プロフィール写真</div>
+        <div className="text-[13px] text-gray-600">プロフィール写真</div>
 
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden ring-1 ring-gray-200">
+          <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
             {form.photo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.photo_url} alt="profile" className="w-full h-full object-cover" />
+              <img
+                src={form.photo_url}
+                alt="profile"
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <div className="w-full h-full grid place-items-center text-gray-400 text-xs">
-                NO PHOTO
-              </div>
+              <div className="text-xs text-gray-400">NO PHOTO</div>
             )}
           </div>
 
@@ -194,17 +201,14 @@ export default function ProfileScreen() {
               accept="image/*"
               disabled={photoUploading}
               onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-gray-700"
             />
             <div className="text-xs text-gray-500">
-              画像は最大 5MB。アップロード後、自動で保存されます。
+              画像は最大 5MB。アップロード後、プロフィール保存時に確定します。
             </div>
+            {photoUploading && <div className="text-sm text-gray-700">写真をアップロード中…</div>}
+            {!!photoErr && <div className="text-sm text-red-600">{photoErr}</div>}
           </div>
         </div>
-
-        {photoUploading && (
-          <div className="text-sm text-gray-600">写真をアップロード中…</div>
-        )}
       </section>
 
       {/* カード: 基本情報 */}
@@ -361,7 +365,7 @@ export default function ProfileScreen() {
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
           className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
-          disabled={saving}
+          disabled={saving || photoUploading}
           onClick={onSave}
         >
           {saving ? '保存中…' : '保存して次へ'}

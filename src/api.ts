@@ -19,18 +19,10 @@ function base(path: string) {
   return API_BASE.replace(/\/+$/, '') + path;
 }
 
-function isFormDataBody(body: any): body is FormData {
-  return typeof FormData !== 'undefined' && body instanceof FormData;
-}
-
 async function doFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
-
-  // ★重要：FormData の場合、Content-Type はブラウザに任せる（boundary が必要）
-  if (!headers.has('Content-Type') && init.body && !isFormDataBody(init.body)) {
+  if (!headers.has('Content-Type') && init.body && !(init.body instanceof FormData))
     headers.set('Content-Type', 'application/json');
-  }
-
   if (ACCESS_TOKEN) headers.set('Authorization', 'Bearer ' + ACCESS_TOKEN);
   return fetch(base(path), { credentials: 'include', ...init, headers });
 }
@@ -86,20 +78,7 @@ export const getProfile = () => apiGetJson('/profile');
 export const saveProfile = (input: any) => apiPutJson('/profile', input);
 export const getMe = () => apiGetJson('/me');
 
-// ★追加：プロフィール写真アップロード（multipart）
-export async function uploadProfilePhoto(file: File): Promise<{ ok: true; photo_url: string; photo_masked_url: string | null }> {
-  const fd = new FormData();
-  fd.append('photo', file);
-
-  const r = await apiFetch('/profile/photo', { method: 'POST', body: fd });
-  if (!r.ok) {
-    const t = await r.text().catch(() => '');
-    throw new Error(`/profile/photo failed: ${r.status} ${t}`);
-  }
-  return r.json();
-}
-
-// setup（型を付ける）
+// setup
 export const getSetup = () => apiGetJson<{ setup: SetupDTO | null }>('/setup');
 export const saveSetup = (input: SetupDTO) => apiPutJson<{ setup: SetupDTO }>('/setup', input);
 
@@ -107,7 +86,7 @@ export const saveSetup = (input: SetupDTO) => apiPutJson<{ setup: SetupDTO }>('/
 export const getMatchPrefs = () => apiGetJson('/match-prefs');
 export const saveMatchPrefs = (payload: any) => apiPutJson('/match-prefs', payload);
 
-/* ===================== Terms (NEW) ===================== */
+/* ===================== Terms ===================== */
 export type TermsDoc = {
   id: number;
   version: string;
@@ -129,6 +108,29 @@ export const getTermsStatus = () => apiGetJson<TermsStatusResponse>('/terms/stat
 export const acceptTerms = (payload?: { termsId?: number; version?: string; userAgent?: string }) =>
   apiPostJson('/terms/accept', payload ?? {});
 
+/* ===================== Blob Upload ===================== */
+export type BlobUploadResponse = {
+  ok: true;
+  url: string;
+  pathname: string;
+};
+
+export async function uploadProfilePhoto(file: File): Promise<BlobUploadResponse> {
+  const fd = new FormData();
+  fd.append('file', file);
+
+  const r = await apiFetch('/blob/profile-photo', {
+    method: 'POST',
+    body: fd,
+  });
+
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`/profile/photo failed: ${r.status}\n${t}`);
+  }
+  return r.json();
+}
+
 /* ===================== Auth ===================== */
 export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   const r = await doFetch('/auth/login', {
@@ -149,6 +151,7 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
   return at;
 }
 
+// groups
 export async function getGroupByToken(token: string) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string;
 
