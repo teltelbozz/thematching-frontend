@@ -181,7 +181,7 @@ export default function ProfileScreen() {
   const isError = msg && msg.includes('失敗');
 
   return (
-    <div className="max-w-md mx-auto px-5 pb-28 pt-4">
+    <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
       <h1 className="text-2xl font-bold tracking-tight text-center mb-6">プロフィール登録</h1>
 
       {/* 写真 */}
