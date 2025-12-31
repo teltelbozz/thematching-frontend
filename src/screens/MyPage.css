@@ -78,7 +78,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--line);
   background: #fff;
   flex: 0 0 auto;
@@ -125,7 +126,8 @@
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .mp-item {
