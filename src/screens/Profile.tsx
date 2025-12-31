@@ -181,72 +181,18 @@ export default function ProfileScreen() {
   const isError = msg && msg.includes('失敗');
 
   return (
-    <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
-      <h1 className="text-2xl font-bold tracking-tight text-center mb-6">プロフィール登録</h1>
-<div className="mt-6 p-3 text-xs bg-yellow-100 text-black rounded">
-  debug: scrollHeight={document.documentElement.scrollHeight} / innerHeight={window.innerHeight}
-</div>
-      {/* 写真 */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4">
-        <div className="text-[13px] text-gray-600">プロフィール写真</div>
+  <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
+    <h1>DEBUG</h1>
 
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-            {form.photo_url ? (
-              <img src={form.photo_url} alt="profile" className="w-full h-full object-cover" />
-            ) : (
-              <div className="text-xs text-gray-400">NO PHOTO</div>
-            )}
-          </div>
-
-          <div className="flex-1 space-y-2">
-            <input
-              type="file"
-              accept="image/*"
-              disabled={photoUploading || !canUploadPhoto}
-              onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-            />
-
-            {!canUploadPhoto && (
-              <div className="text-xs text-amber-700">
-                ※ 先にプロフィールを一度保存してください（孤児Blobを残さない設計のため）
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500">
-              画像は最大 5MB。アップロード後、プロフィール保存時に確定します。
-            </div>
-
-            {photoUploading && <div className="text-sm text-gray-700">写真をアップロード中…</div>}
-            {!!photoErr && <div className="text-sm text-red-600">{photoErr}</div>}
-          </div>
-        </div>
-      </section>
-
-      {/* 以下、あなたの既存UIはそのまま（省略せず貼るならここに続けてOK） */}
-      {/* ...（基本情報/学歴/詳細/トースト）... */}
-
-      {isError && <div className="text-center text-sm text-red-600 mt-4">{msg}</div>}
-
-      {msg === '保存しました。' && (
-        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">
-          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
-            保存しました
-          </div>
-        </div>
-      )}
-
-      <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
-        <button
-          className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
-          disabled={saving || photoUploading}
-          onClick={onSave}
-        >
-          {saving ? '保存中…' : '保存して次へ'}
-        </button>
-      </div>
+    <div style={{ height: 1200, background: '#333', color: '#fff' }}>
+      FORCE HEIGHT TEST
     </div>
-  );
+
+    <div className="fixed inset-x-0 bottom-0 bg-white p-4">
+      footer
+    </div>
+  </div>
+);
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
