@@ -183,7 +183,9 @@ export default function ProfileScreen() {
   return (
     <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
       <h1 className="text-2xl font-bold tracking-tight text-center mb-6">プロフィール登録</h1>
-
+<div className="mt-6 p-3 text-xs bg-yellow-100 text-black rounded">
+  debug: scrollHeight={document.documentElement.scrollHeight} / innerHeight={window.innerHeight}
+</div>
       {/* 写真 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4">
         <div className="text-[13px] text-gray-600">プロフィール写真</div>
