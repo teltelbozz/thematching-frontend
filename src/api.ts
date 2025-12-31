@@ -109,6 +109,7 @@ export const acceptTerms = (payload?: { termsId?: number; version?: string; user
   apiPostJson('/terms/accept', payload ?? {});
 
 /* ===================== Blob Upload ===================== */
+/* ===================== Blob Upload ===================== */
 export type BlobUploadResponse = {
   ok: true;
   url: string;
@@ -126,7 +127,8 @@ export async function uploadProfilePhoto(file: File): Promise<BlobUploadResponse
 
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    throw new Error(`/profile/photo failed: ${r.status}\n${t}`);
+    // ✅ 正しいエンドポイント名に修正
+    throw new Error(`/blob/profile-photo failed: ${r.status}\n${t}`);
   }
   return r.json();
 }
@@ -165,3 +167,4 @@ export async function getGroupByToken(token: string) {
   }
   return res.json();
 }
+
