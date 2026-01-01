@@ -61,6 +61,7 @@ export default function ProfileScreen() {
     };
   }, [loc.search]);
 
+  // 成功トーストは3秒で自動消滅
   useEffect(() => {
     if (msg === '保存しました。') {
       const t = setTimeout(() => setMsg(null), 3000);
@@ -68,6 +69,7 @@ export default function ProfileScreen() {
     }
   }, [msg]);
 
+  // 初期ロード
   useEffect(() => {
     (async () => {
       try {
@@ -90,7 +92,7 @@ export default function ProfileScreen() {
           photo_masked_url: p.photo_masked_url ?? null,
         });
 
-        // ✅ まず /me の hasProfile で「行があるか」を判定
+        // ✅ /me の hasProfile で「行があるか」を判定（A設計）
         const me = await getMe().catch(() => null);
         setCanUploadPhoto(!!me?.hasProfile);
       } catch (e) {
@@ -129,7 +131,7 @@ export default function ProfileScreen() {
 
     setPhotoUploading(true);
     try {
-      const up = await uploadProfilePhoto(file);
+      const up = await uploadProfilePhoto(file); // /api/blob/profile-photo
       set('photo_url', up.url);
     } catch (e: any) {
       console.error('[Profile] photo upload failed', e);
@@ -140,6 +142,7 @@ export default function ProfileScreen() {
   }
 
   async function onSave() {
+    if (saving) return;
     setSaving(true);
     setMsg(null);
 
@@ -158,15 +161,17 @@ export default function ProfileScreen() {
 
       await saveProfile(payload);
 
-      // ✅ 保存したら hasProfile=true になるのでアップロード解放
+      // ✅ 保存したら hasProfile=true になる想定なのでアップロード解放
       setCanUploadPhoto(true);
 
+      // ✅ オンボーディング：保存したら閉じる
       if (doneMode === 'close') {
         const closed = closeLiffWindowSafe();
         if (!closed) nav(requestedPath || '/', { replace: true });
         return;
       }
 
+      // 既存挙動：保存しましたトースト
       setMsg('保存しました。');
     } catch (e) {
       console.error('[Profile] save failed', e);
@@ -178,21 +183,216 @@ export default function ProfileScreen() {
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
-  const isError = msg && msg.includes('失敗');
+  const isError = !!msg && msg.includes('失敗');
 
   return (
-  <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
-    <h1>DEBUG</h1>
+    <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
+      <h1 className="text-2xl font-bold tracking-tight text-center mb-6">
+        プロフィール登録
+      </h1>
 
-    <div style={{ height: 1200, background: '#333', color: '#fff' }}>
-      FORCE HEIGHT TEST
-    </div>
+      {/* ===== Debug（必要なら残す） ===== */}
+      <div className="mt-2 p-3 text-xs bg-yellow-100 text-black rounded">
+        debug: scrollHeight={document.documentElement.scrollHeight} / innerHeight={window.innerHeight}
+      </div>
 
-    <div className="fixed inset-x-0 bottom-0 bg-white p-4">
-      footer
+      {/* ★ 写真 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4 mt-4">
+        <div className="text-[13px] text-gray-600">プロフィール写真</div>
+
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
+            {form.photo_url ? (
+              <img src={form.photo_url} alt="profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="text-xs text-gray-400">NO PHOTO</div>
+            )}
+          </div>
+
+          <div className="flex-1 space-y-2">
+            <input
+              type="file"
+              accept="image/*"
+              disabled={photoUploading || !canUploadPhoto}
+              onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+            />
+
+            {!canUploadPhoto && (
+              <div className="text-xs text-amber-700">
+                ※ 先にプロフィールを一度保存してください（孤児Blobを残さない設計のため）
+              </div>
+            )}
+
+            <div className="text-xs text-gray-500">
+              画像は最大 5MB。アップロード後、プロフィール保存時に確定します。
+            </div>
+
+            {photoUploading && <div className="text-sm text-gray-700">写真をアップロード中…</div>}
+            {!!photoErr && <div className="text-sm text-red-600">{photoErr}</div>}
+          </div>
+        </div>
+      </section>
+
+      {/* カード: 基本情報 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
+        <Field label="ニックネーム">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.nickname ?? ''}
+            onChange={(e) => set('nickname', e.target.value)}
+            placeholder="例）テスト太郎"
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="年齢">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              type="number"
+              min={18}
+              max={120}
+              value={form.age ?? ''}
+              onChange={(e) =>
+                set('age', e.target.value === '' ? undefined : Number(e.target.value))
+              }
+              placeholder="例）28"
+            />
+          </Field>
+
+          <Field label="性別">
+            <select
+              className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
+              value={form.gender ?? ''}
+              onChange={(e) => set('gender', e.target.value)}
+            >
+              <option value="">選択してください</option>
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+            </select>
+          </Field>
+        </div>
+      </section>
+
+      {/* カード: 学歴・居住 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
+        <Field label="学歴">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.education ?? ''}
+            onChange={(e) => set('education', e.target.value)}
+            placeholder="例）大学卒"
+          />
+        </Field>
+
+        <Field label="大学">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.university ?? ''}
+            onChange={(e) => set('university', e.target.value)}
+            placeholder="例）○○大学"
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="出身地">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              value={form.hometown ?? ''}
+              onChange={(e) => set('hometown', e.target.value)}
+              placeholder="例）福岡県"
+            />
+          </Field>
+
+          <Field label="住まい">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              value={form.residence ?? ''}
+              onChange={(e) => set('residence', e.target.value)}
+              placeholder="例）東京都渋谷区"
+            />
+          </Field>
+        </div>
+      </section>
+
+      {/* カード: 詳細 */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
+        <Field label="職業">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            value={form.occupation ?? ''}
+            onChange={(e) => set('occupation', e.target.value)}
+            placeholder="例）engineer"
+          />
+        </Field>
+
+        <Field label="性格（選択／自由入力可）">
+          <input
+            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            list="personality-list"
+            value={form.personality ?? ''}
+            onChange={(e) => set('personality', e.target.value)}
+            placeholder="例）明るい盛り上げタイプ"
+          />
+          <datalist id="personality-list">
+            <option value="明るい盛り上げタイプ" />
+            <option value="落ち着いた聞き役タイプ" />
+            <option value="ムードメーカー" />
+          </datalist>
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="年収（万円）">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              type="number"
+              min={0}
+              value={form.income ?? ''}
+              onChange={(e) =>
+                set('income', e.target.value === '' ? undefined : Number(e.target.value))
+              }
+              placeholder="例）650"
+            />
+          </Field>
+
+          <Field label="雰囲気（選択／自由入力可）">
+            <input
+              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+              list="atmosphere-list"
+              value={form.atmosphere ?? ''}
+              onChange={(e) => set('atmosphere', e.target.value)}
+              placeholder="例）クールなエリート系"
+            />
+            <datalist id="atmosphere-list">
+              <option value="クールなエリート系" />
+              <option value="親しみやすい癒し系" />
+              <option value="おしゃれでスマート" />
+            </datalist>
+          </Field>
+        </div>
+      </section>
+
+      {isError && <div className="text-center text-sm text-red-600 mt-4">{msg}</div>}
+
+      {msg === '保存しました。' && (
+        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">
+          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
+            保存しました
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
+        <button
+          className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
+          disabled={saving || photoUploading}
+          onClick={onSave}
+        >
+          {saving ? '保存中…' : '保存して次へ'}
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
