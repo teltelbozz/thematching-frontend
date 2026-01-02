@@ -21,8 +21,9 @@ function base(path: string) {
 
 async function doFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers || {});
-  if (!headers.has('Content-Type') && init.body && !(init.body instanceof FormData))
+  if (!headers.has('Content-Type') && init.body && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
+  }
   if (ACCESS_TOKEN) headers.set('Authorization', 'Bearer ' + ACCESS_TOKEN);
   return fetch(base(path), { credentials: 'include', ...init, headers });
 }
@@ -43,25 +44,43 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
   return r;
 }
 
+async function readErrorBody(r: Response) {
+  const ct = r.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    const j = await r.json().catch(() => null);
+    return j ? JSON.stringify(j) : '';
+  }
+  return r.text().catch(() => '');
+}
+
 export async function apiGetJson<T = any>(path: string): Promise<T> {
   const r = await apiFetch(path);
-  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await readErrorBody(r);
+    throw new Error(`${path} failed: ${r.status}\n${t}`);
+  }
   return r.json();
 }
 export async function apiPutJson<T = any>(path: string, body: any): Promise<T> {
   const r = await apiFetch(path, { method: 'PUT', body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await readErrorBody(r);
+    throw new Error(`${path} failed: ${r.status}\n${t}`);
+  }
   return r.json();
 }
 export async function apiPostJson<T = any>(path: string, body: any): Promise<T> {
   const r = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await readErrorBody(r);
+    throw new Error(`${path} failed: ${r.status}\n${t}`);
+  }
   return r.json();
 }
 
 /* ===================== Domain Types ===================== */
 
-export type CandidateSlot = { date: string; time: '19:00'|'21:00' };
+export type CandidateSlot = { date: string; time: '19:00' | '21:00' };
 
 export type SetupDTO = {
   type_mode: 'wine_talk' | 'wine_and_others';
@@ -71,10 +90,75 @@ export type SetupDTO = {
   cost_pref: 'men_pay_all' | 'split_even' | 'follow_partner';
 };
 
+/** プロフィール入力（draft/confirm で共通利用） */
+export type ProfileInput = {
+  nickname?: string | null;
+  age?: number | null;
+  gender?: 'male' | 'female' | 'other' | string | null;
+  occupation?: string | null;
+
+  education?: string | null;
+  university?: string | null;
+  hometown?: string | null;
+  residence?: string | null;
+
+  personality?: string | null;
+  income?: number | null;
+  atmosphere?: string | null;
+
+  // 写真URL（draftでは tempUrl を入れる想定）
+  photo_url?: string | null;
+  photo_masked_url?: string | null;
+};
+
+export type ProfileGetResponse = {
+  profile: any; // 既存互換（必要なら後で型を固めます）
+};
+
+/** Draft状態の取得レスポンス（想定） */
+export type ProfileDraft = {
+  draft_id: number;
+  // 入力内容
+  nickname?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  occupation?: string | null;
+  education?: string | null;
+  university?: string | null;
+  hometown?: string | null;
+  residence?: string | null;
+  personality?: string | null;
+  income?: number | null;
+  atmosphere?: string | null;
+
+  // draft中の写真
+  photo_url?: string | null; // temp blob url
+  photo_pathname?: string | null; // vercel blob pathname
+
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ProfileDraftGetResponse =
+  | { ok: true; draft: ProfileDraft | null }
+  | { ok: true; draft: null };
+
+export type ProfileDraftSaveResponse = { ok: true; draft: ProfileDraft };
+
+export type ProfileConfirmResponse = {
+  ok: true;
+  profile: any;
+};
+
+export type ProfileCancelResponse = {
+  ok: true;
+  cancelled: true;
+};
+
 /* ===================== Domain APIs ===================== */
 
 // me / profile
-export const getProfile = () => apiGetJson('/profile');
+export const getProfile = () => apiGetJson<ProfileGetResponse>('/profile');
 export const saveProfile = (input: any) => apiPutJson('/profile', input);
 export const getMe = () => apiGetJson('/me');
 
@@ -109,13 +193,16 @@ export const acceptTerms = (payload?: { termsId?: number; version?: string; user
   apiPostJson('/terms/accept', payload ?? {});
 
 /* ===================== Blob Upload ===================== */
-/* ===================== Blob Upload ===================== */
 export type BlobUploadResponse = {
   ok: true;
   url: string;
   pathname: string;
 };
 
+/**
+ * 旧フロー互換：プロフィールが既に存在する前提で写真アップロード（A設計）。
+ * 既存動作を壊さないため残してあります。
+ */
 export async function uploadProfilePhoto(file: File): Promise<BlobUploadResponse> {
   const fd = new FormData();
   fd.append('file', file);
@@ -127,11 +214,56 @@ export async function uploadProfilePhoto(file: File): Promise<BlobUploadResponse
 
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    // ✅ 正しいエンドポイント名に修正
     throw new Error(`/blob/profile-photo failed: ${r.status}\n${t}`);
   }
   return r.json();
 }
+
+/**
+ * 新フロー：Draft用の写真アップロード（DB確定は confirm で行う）
+ * - backend: POST /api/blob/profile-photo-draft
+ * - field: "file"
+ */
+export async function uploadProfileDraftPhoto(file: File): Promise<BlobUploadResponse> {
+  const fd = new FormData();
+  fd.append('file', file);
+
+  const r = await apiFetch('/blob/profile-photo-draft', {
+    method: 'POST',
+    body: fd,
+  });
+
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`/blob/profile-photo-draft failed: ${r.status}\n${t}`);
+  }
+  return r.json();
+}
+
+/* ===================== Profile Draft Flow ===================== */
+/**
+ * Draft取得（無ければ null）
+ */
+export const getProfileDraft = () => apiGetJson<ProfileDraftGetResponse>('/profile/draft');
+
+/**
+ * Draft保存（仮保存）
+ * - ①の「次へ（仮保存）」で叩く想定
+ */
+export const saveProfileDraft = (input: ProfileInput) =>
+  apiPutJson<ProfileDraftSaveResponse>('/profile/draft', input);
+
+/**
+ * Confirm（確定）
+ * - ③の確認画面でOK押下 → draft内容を user_profiles に反映 + temp blob を本採用
+ */
+export const confirmProfileDraft = () => apiPostJson<ProfileConfirmResponse>('/profile/confirm', {});
+
+/**
+ * Cancel（破棄）
+ * - 途中離脱・キャンセル → draft + temp blob を破棄
+ */
+export const cancelProfileDraft = () => apiPostJson<ProfileCancelResponse>('/profile/cancel', {});
 
 /* ===================== Auth ===================== */
 export async function serverLoginWithIdToken(idToken: string): Promise<string> {
@@ -158,13 +290,13 @@ export async function getGroupByToken(token: string) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string;
 
   const res = await fetch(`${baseUrl}/groups/${token}`, {
-    method: "GET",
-    credentials: "include"
+    method: 'GET',
+    credentials: 'include',
   });
 
   if (!res.ok) {
-    throw new Error(`/groups/${token} GET failed: ${res.status}`);
+    const t = await res.text().catch(() => '');
+    throw new Error(`/groups/${token} GET failed: ${res.status}\n${t}`);
   }
   return res.json();
 }
-

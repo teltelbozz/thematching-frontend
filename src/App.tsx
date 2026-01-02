@@ -10,7 +10,6 @@ import {
 import { initLiff, whenAuthReady } from './liff';
 import { getAccessToken, getMe, getTermsStatus } from './api';
 
-import ProfileSetup from './screens/Profile';
 import Home from './screens/Home';
 import MyPage from './screens/MyPage';
 import Faq from './screens/Faq';
@@ -22,12 +21,16 @@ import GroupPage from './screens/GroupPage';
 import Terms from './screens/Terms';
 import Onboarding from './screens/Onboarding';
 
+// ★新フロー
+import ProfileDraft from './screens/ProfileDraft';
+import ProfilePhoto from './screens/ProfilePhoto';
+import ProfileConfirm from './screens/ProfileConfirm';
+
 function BootRouter() {
   const navigate = useNavigate();
   const location = useLocation();
   const routedOnce = useRef(false);
 
-  // 1) LIFF 初期化（1回だけ）
   useEffect(() => {
     initLiff().catch((e) => {
       console.error('[boot] initLiff error', e);
@@ -35,7 +38,6 @@ function BootRouter() {
     });
   }, [navigate]);
 
-  // 2) 認証完了待ち → /me → terms status → 遷移
   useEffect(() => {
     let cancelled = false;
 
@@ -45,9 +47,17 @@ function BootRouter() {
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
 
-      // ★オンボーディング/規約/プロフィール画面は「画面側」で遷移制御する
+      // ★オンボーディング/規約/プロフィールフローは「画面側」で遷移制御する
       const p = location.pathname;
-      if (p === '/onboarding' || p === '/terms' || p === '/profile') return;
+      if (
+        p === '/onboarding' ||
+        p === '/terms' ||
+        p === '/profile' ||
+        p === '/profile/photo' ||
+        p === '/profile/confirm'
+      ) {
+        return;
+      }
 
       try {
         const token = getAccessToken();
@@ -58,8 +68,7 @@ function BootRouter() {
 
         const params = new URLSearchParams(location.search);
         const requested = params.get('r');
-        const requestedPath =
-          requested && requested.startsWith('/') ? requested : '/';
+        const requestedPath = requested && requested.startsWith('/') ? requested : '/';
 
         const me = await getMe();
 
@@ -101,14 +110,13 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
 
-        {/* ★ 新規：オンボーディング（リッチメニューのリンク先） */}
         <Route path="/onboarding" element={<Onboarding />} />
-
-        {/* 利用規約同意 */}
         <Route path="/terms" element={<Terms />} />
 
-        {/* プロフィール登録 */}
-        <Route path="/profile" element={<ProfileSetup />} />
+        {/* ★新プロフィール導線 */}
+        <Route path="/profile" element={<ProfileDraft />} />
+        <Route path="/profile/photo" element={<ProfilePhoto />} />
+        <Route path="/profile/confirm" element={<ProfileConfirm />} />
 
         {/* マイページとその配下 */}
         <Route path="/mypage" element={<MyPage />} />
@@ -125,7 +133,6 @@ export default function App() {
         {/* グループページ */}
         <Route path="/group/:token" element={<GroupPage />} />
 
-        {/* フォールバック */}
         <Route path="*" element={<Home />} />
       </Routes>
     </BrowserRouter>

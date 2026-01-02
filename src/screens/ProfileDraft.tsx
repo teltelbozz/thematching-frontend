@@ -1,10 +1,9 @@
-// src/screens/Profile.tsx
+// src/screens/ProfileDraft.tsx
 import { useEffect, useMemo, useState } from 'react';
-import { getMe, getProfile, saveProfile, uploadProfilePhoto } from '../api';
+import { apiFetch } from '../api';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { closeLiffWindowSafe } from '../liff';
 
-type Profile = {
+type DraftProfile = {
   nickname?: string | null;
   age?: number | null;
   gender?: string | null;
@@ -21,11 +20,50 @@ type Profile = {
   photo_masked_url?: string | null;
 };
 
-export default function ProfileScreen() {
+type DraftGetResponse = {
+  ok: true;
+  draft: DraftProfile | null;
+};
+
+async function getDraft(): Promise<DraftGetResponse> {
+  const r = await apiFetch('/profile/draft', { method: 'GET' });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`GET /profile/draft failed: ${r.status} ${t}`);
+  }
+  return r.json();
+}
+
+async function putDraft(payload: Partial<DraftProfile>): Promise<void> {
+  const r = await apiFetch('/profile/draft', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`PUT /profile/draft failed: ${r.status} ${t}`);
+  }
+}
+
+export default function ProfileDraft() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  const [form, setForm] = useState<Profile>({
+  const { requestedPath, doneMode } = useMemo(() => {
+    const params = new URLSearchParams(loc.search);
+    const r = params.get('r');
+    const done = params.get('done'); // "close" など
+    return {
+      requestedPath: r && r.startsWith('/') ? r : '/',
+      doneMode: done || '',
+    };
+  }, [loc.search]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string>('');
+
+  const [form, setForm] = useState<DraftProfile>({
     nickname: '',
     age: undefined,
     gender: '',
@@ -41,141 +79,72 @@ export default function ProfileScreen() {
     photo_masked_url: null,
   });
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [photoErr, setPhotoErr] = useState<string>('');
-
-  // ✅ A設計：プロフィール行が無い状態ではアップロードできない
-  const [canUploadPhoto, setCanUploadPhoto] = useState(false);
-
-  const { requestedPath, doneMode } = useMemo(() => {
-    const params = new URLSearchParams(loc.search);
-    const r = params.get('r');
-    const done = params.get('done'); // "close"
-    return {
-      requestedPath: r && r.startsWith('/') ? r : '/',
-      doneMode: done || '',
-    };
-  }, [loc.search]);
-
-  // 成功トーストは3秒で自動消滅
   useEffect(() => {
-    if (msg === '保存しました。') {
-      const t = setTimeout(() => setMsg(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [msg]);
-
-  // 初期ロード
-  useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
+      setErr('');
       try {
-        const r = await getProfile();
-        const p = (r?.profile || {}) as any;
-
+        const r = await getDraft();
+        if (cancelled) return;
+        const d = r?.draft || {};
         setForm({
-          nickname: p.nickname ?? '',
-          age: p.age ?? undefined,
-          gender: p.gender ?? '',
-          occupation: p.occupation ?? '',
-          education: p.education ?? '',
-          university: p.university ?? '',
-          hometown: p.hometown ?? '',
-          residence: p.residence ?? '',
-          personality: p.personality ?? '',
-          income: p.income ?? undefined,
-          atmosphere: p.atmosphere ?? '',
-          photo_url: p.photo_url ?? null,
-          photo_masked_url: p.photo_masked_url ?? null,
+          nickname: d.nickname ?? '',
+          age: d.age ?? undefined,
+          gender: d.gender ?? '',
+          occupation: d.occupation ?? '',
+          education: d.education ?? '',
+          university: d.university ?? '',
+          hometown: d.hometown ?? '',
+          residence: d.residence ?? '',
+          personality: d.personality ?? '',
+          income: d.income ?? undefined,
+          atmosphere: d.atmosphere ?? '',
+          photo_url: d.photo_url ?? null,
+          photo_masked_url: d.photo_masked_url ?? null,
         });
-
-        // ✅ /me の hasProfile で「行があるか」を判定（A設計）
-        const me = await getMe().catch(() => null);
-        setCanUploadPhoto(!!me?.hasProfile);
-      } catch (e) {
-        console.warn('[Profile] load failed', e);
-        setMsg('プロフィールの読み込みに失敗しました。');
-        setCanUploadPhoto(false);
+      } catch (e: any) {
+        setErr(e?.message || String(e));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  function set<K extends keyof Profile>(key: K, value: Profile[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  function set<K extends keyof DraftProfile>(key: K, value: DraftProfile[K]) {
+    setForm((p) => ({ ...p, [key]: value }));
   }
 
-  async function onPickPhoto(file: File | null) {
-    if (!file) return;
-    setPhotoErr('');
-    setMsg(null);
-
-    // ✅ A設計：保存前アップロードは禁止（孤児Blob防止）
-    if (!canUploadPhoto) {
-      setPhotoErr('先にプロフィールを一度「保存」してください（保存後に写真をアップロードできます）。');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      setPhotoErr('画像ファイルを選択してください。');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoErr('画像サイズは最大 5MB です。');
-      return;
-    }
-
-    setPhotoUploading(true);
-    try {
-      const up = await uploadProfilePhoto(file); // /api/blob/profile-photo
-      set('photo_url', up.url);
-    } catch (e: any) {
-      console.error('[Profile] photo upload failed', e);
-      setPhotoErr(e?.message || '写真アップロードに失敗しました。');
-    } finally {
-      setPhotoUploading(false);
-    }
-  }
-
-  async function onSave() {
+  async function onNext() {
     if (saving) return;
     setSaving(true);
-    setMsg(null);
+    setErr('');
 
     try {
-      const payload: any = {
+      const payload: Partial<DraftProfile> = {
         ...form,
         age:
-          form.age === undefined || form.age === null || form.age === ('' as any)
+          form.age === undefined || form.age === null || (form.age as any) === ''
             ? undefined
             : Number(form.age),
         income:
-          form.income === undefined || form.income === null || form.income === ('' as any)
+          form.income === undefined || form.income === null || (form.income as any) === ''
             ? undefined
             : Number(form.income),
       };
 
-      await saveProfile(payload);
+      await putDraft(payload);
 
-      // ✅ 保存したら hasProfile=true になる想定なのでアップロード解放
-      setCanUploadPhoto(true);
-
-      // ✅ オンボーディング：保存したら閉じる
-      if (doneMode === 'close') {
-        const closed = closeLiffWindowSafe();
-        if (!closed) nav(requestedPath || '/', { replace: true });
-        return;
-      }
-
-      // 既存挙動：保存しましたトースト
-      setMsg('保存しました。');
-    } catch (e) {
-      console.error('[Profile] save failed', e);
-      setMsg('保存に失敗しました。');
+      // 次は写真へ（r/done を引き回し）
+      const qs = new URLSearchParams();
+      if (requestedPath) qs.set('r', requestedPath);
+      if (doneMode) qs.set('done', doneMode);
+      nav(`/profile/photo?${qs.toString()}`, { replace: true });
+    } catch (e: any) {
+      setErr(e?.message || String(e));
     } finally {
       setSaving(false);
     }
@@ -183,52 +152,27 @@ export default function ProfileScreen() {
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
 
-  const isError = !!msg && msg.includes('失敗');
-
   return (
     <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
-      <h1 className="text-2xl font-bold tracking-tight text-center mb-6">
-        プロフィール登録
-      </h1>
+      <h1 className="text-2xl font-bold tracking-tight text-center mb-6">プロフィール登録</h1>
 
-      {/* ★ 写真 */}
-      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-4 mt-4">
-        <div className="text-[13px] text-gray-600">プロフィール写真</div>
-
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-            {form.photo_url ? (
-              <img src={form.photo_url} alt="profile" className="w-full h-full object-cover" />
-            ) : (
-              <div className="text-xs text-gray-400">NO PHOTO</div>
-            )}
-          </div>
-
-          <div className="flex-1 space-y-2">
-            <input
-              type="file"
-              accept="image/*"
-              disabled={photoUploading || !canUploadPhoto}
-              onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-            />
-
-            {!canUploadPhoto && (
-              <div className="text-xs text-amber-700">
-                ※ 先にプロフィールを一度保存してください（孤児Blobを残さない設計のため）
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500">
-              画像は最大 5MB。アップロード後、プロフィール保存時に確定します。
-            </div>
-
-            {photoUploading && <div className="text-sm text-gray-700">写真をアップロード中…</div>}
-            {!!photoErr && <div className="text-sm text-red-600">{photoErr}</div>}
-          </div>
+      {!!err && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+          {err}
         </div>
+      )}
+
+      {/* 注意：この画面では写真はアップしない */}
+      <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-3">
+        <div className="text-sm font-semibold text-gray-900">手順</div>
+        <ol className="text-sm text-gray-600 list-decimal pl-5 space-y-1">
+          <li>ここで入力 → 次へ（仮保存）</li>
+          <li>写真アップロード</li>
+          <li>確認 → OKで確定（途中離脱は破棄）</li>
+        </ol>
       </section>
 
-      {/* カード: 基本情報 */}
+      {/* 基本情報 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="ニックネーム">
           <input
@@ -247,9 +191,7 @@ export default function ProfileScreen() {
               min={18}
               max={120}
               value={form.age ?? ''}
-              onChange={(e) =>
-                set('age', e.target.value === '' ? undefined : Number(e.target.value))
-              }
+              onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
               placeholder="例）28"
             />
           </Field>
@@ -269,7 +211,7 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* カード: 学歴・居住 */}
+      {/* 学歴・居住 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="学歴">
           <input
@@ -310,7 +252,7 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {/* カード: 詳細 */}
+      {/* 詳細 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="職業">
           <input
@@ -343,9 +285,7 @@ export default function ProfileScreen() {
               type="number"
               min={0}
               value={form.income ?? ''}
-              onChange={(e) =>
-                set('income', e.target.value === '' ? undefined : Number(e.target.value))
-              }
+              onChange={(e) => set('income', e.target.value === '' ? undefined : Number(e.target.value))}
               placeholder="例）650"
             />
           </Field>
@@ -367,23 +307,13 @@ export default function ProfileScreen() {
         </div>
       </section>
 
-      {isError && <div className="text-center text-sm text-red-600 mt-4">{msg}</div>}
-
-      {msg === '保存しました。' && (
-        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50">
-          <div className="rounded-lg bg-black text-white/95 px-4 py-2 shadow-lg shadow-black/20">
-            保存しました
-          </div>
-        </div>
-      )}
-
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
         <button
           className="w-full h-12 rounded-xl bg-black text-white font-semibold disabled:opacity-60"
-          disabled={saving || photoUploading}
-          onClick={onSave}
+          disabled={saving}
+          onClick={onNext}
         >
-          {saving ? '保存中…' : '保存して次へ'}
+          {saving ? '保存中…' : '次へ（仮保存）'}
         </button>
       </div>
     </div>
