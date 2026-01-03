@@ -1,54 +1,12 @@
 // src/screens/ProfilePhoto.tsx
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   getProfileDraft,
   saveProfileDraft,
   uploadProfileDraftPhoto,
-  type ProfileDraftGetResponse,
+  type ProfileDraft,
 } from '../api';
-import { useLocation, useNavigate } from 'react-router-dom';
-
-type DraftProfile = {
-  nickname?: string | null;
-  age?: number | null;
-  gender?: string | null;
-  occupation?: string | null;
-  education?: string | null;
-  university?: string | null;
-  hometown?: string | null;
-  residence?: string | null;
-  personality?: string | null;
-  income?: number | null;
-  atmosphere?: string | null;
-
-  // draftの写真（temp）
-  photo_url?: string | null;
-  photo_pathname?: string | null;
-};
-
-function normalizeDraft(resp: ProfileDraftGetResponse): DraftProfile | null {
-  const d: any = (resp as any)?.draft ?? null;
-  if (!d) return null;
-
-  // いまバックエンドが profile_drafts を採用していて
-  // 列名が draft_photo_url / draft_photo_pathname の場合にも吸収
-  return {
-    nickname: d.nickname ?? null,
-    age: d.age ?? null,
-    gender: d.gender ?? null,
-    occupation: d.occupation ?? null,
-    education: d.education ?? null,
-    university: d.university ?? null,
-    hometown: d.hometown ?? null,
-    residence: d.residence ?? null,
-    personality: d.personality ?? null,
-    income: d.income ?? null,
-    atmosphere: d.atmosphere ?? null,
-
-    photo_url: d.photo_url ?? d.draft_photo_url ?? null,
-    photo_pathname: d.photo_pathname ?? d.draft_photo_pathname ?? null,
-  };
-}
 
 export default function ProfilePhoto() {
   const nav = useNavigate();
@@ -68,37 +26,27 @@ export default function ProfilePhoto() {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState('');
 
-  const [draft, setDraft] = useState<DraftProfile | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string>('');
-
-  const qsString = useMemo(() => {
-    const qs = new URLSearchParams();
-    if (requestedPath) qs.set('r', requestedPath);
-    if (doneMode) qs.set('done', doneMode);
-    const s = qs.toString();
-    return s ? `?${s}` : '';
-  }, [requestedPath, doneMode]);
 
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
       setLoading(true);
       setErr('');
       try {
-        const resp = await getProfileDraft(); // ✅ api.ts の正式API
+        const r = await getProfileDraft(); // { ok:true, draft }
         if (cancelled) return;
 
-        const d = normalizeDraft(resp);
+        const d = (r as any)?.draft ?? null;
         setDraft(d);
-        setPhotoUrl(d?.photo_url || '');
+        setPhotoUrl(d?.draft_photo_url || '');
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || String(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => {
       cancelled = true;
     };
@@ -119,22 +67,22 @@ export default function ProfilePhoto() {
 
     setUploading(true);
     try {
-      // ✅ 412回避：確定プロフィール不要の「ドラフト用」アップロードを使う
+      // ✅ draft用アップロード（/api/blob/profile-photo-draft）
       const up = await uploadProfileDraftPhoto(file);
 
-      // ✅ draftへ反映（URL + pathname）
-      // ProfileInput に pathname が無いので any で送る（バックエンドが受けるなら保存される）
+      // ✅ draftテーブルへURL + pathname を保存（confirm/cancelが正しく動くように）
       await saveProfileDraft({
-        photo_url: up.url,
-        photo_pathname: up.pathname,
+        draft_photo_url: up.url,
+        draft_photo_pathname: up.pathname,
       } as any);
 
+      // 画面反映
       setPhotoUrl(up.url);
-      setDraft((prev) => ({
-        ...(prev || {}),
-        photo_url: up.url,
-        photo_pathname: up.pathname,
-      }));
+
+      // draft再取得して表示安定（任意だがデバッグしやすい）
+      const refreshed = await getProfileDraft();
+      const d = (refreshed as any)?.draft ?? null;
+      setDraft(d);
     } catch (e: any) {
       setErr(e?.message || String(e));
     } finally {
@@ -143,52 +91,27 @@ export default function ProfilePhoto() {
   }
 
   function goConfirm() {
-    nav(`/profile/confirm${qsString}`, { replace: true });
+    const qs = new URLSearchParams();
+    if (requestedPath) qs.set('r', requestedPath);
+    if (doneMode) qs.set('done', doneMode);
+    nav(`/profile/confirm?${qs.toString()}`, { replace: true });
   }
 
   function goBack() {
-    // ProfileDraft 画面（仮保存の入力画面）へ戻す
-    nav(`/profile${qsString}`, { replace: true });
+    const qs = new URLSearchParams();
+    if (requestedPath) qs.set('r', requestedPath);
+    if (doneMode) qs.set('done', doneMode);
+    nav(`/profile?${qs.toString()}`, { replace: true });
   }
 
   if (loading) return <div className="p-6 text-gray-600">読み込み中…</div>;
-
-  // draftが無い（= 仮保存せずに直アクセス等）場合
-  if (!draft) {
-    return (
-      <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
-        <h1 className="text-2xl font-bold tracking-tight text-center mb-6">写真アップロード</h1>
-
-        {!!err && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
-            {err}
-          </div>
-        )}
-
-        <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-2">
-          <div className="text-sm text-gray-800">
-            先にプロフィール入力を「次へ（仮保存）」してください。
-          </div>
-        </section>
-
-        <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4">
-          <button
-            className="w-full h-12 rounded-xl bg-black text-white font-semibold"
-            onClick={goBack}
-          >
-            戻る
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen overflow-y-auto max-w-md mx-auto px-5 pb-28 pt-4">
       <h1 className="text-2xl font-bold tracking-tight text-center mb-6">写真アップロード</h1>
 
       {!!err && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm whitespace-pre-wrap">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
           {err}
         </div>
       )}
@@ -212,9 +135,7 @@ export default function ProfilePhoto() {
               disabled={uploading}
               onChange={(e) => onPick(e.target.files?.[0] ?? null)}
             />
-            <div className="text-xs text-gray-500">
-              画像は最大 5MB。次の確認画面で確定します。
-            </div>
+            <div className="text-xs text-gray-500">画像は最大 5MB。次の確認画面で確定します。</div>
             {uploading && <div className="text-sm text-gray-700">アップロード中…</div>}
           </div>
         </div>
@@ -226,9 +147,8 @@ export default function ProfilePhoto() {
 
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-2 mt-5">
         <div className="text-sm font-semibold text-gray-900">入力内容（仮）</div>
-        <div className="text-sm text-gray-700">ニックネーム: {draft.nickname || '（未入力）'}</div>
-        <div className="text-sm text-gray-700">年齢: {draft.age ?? '（未入力）'}</div>
-        <div className="text-sm text-gray-700">性別: {draft.gender || '（未入力）'}</div>
+        <div className="text-sm text-gray-700">ニックネーム: {draft?.nickname || '（未入力）'}</div>
+        <div className="text-sm text-gray-700">年齢: {draft?.age ?? '（未入力）'}</div>
       </section>
 
       <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur border-t border-gray-100 p-4 flex gap-3">
