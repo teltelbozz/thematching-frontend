@@ -16,6 +16,12 @@ type DraftProfile = {
   personality?: string | null;
   income?: number | null;
   atmosphere?: string | null;
+
+  // ✅ draftテーブルの正式カラム
+  draft_photo_url?: string | null;
+  draft_photo_pathname?: string | null;
+
+  // ✅ 旧実装互換（残してOK）
   photo_url?: string | null;
   photo_masked_url?: string | null;
 };
@@ -72,7 +78,6 @@ export default function ProfileConfirm() {
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState('');
-
   const [draft, setDraft] = useState<DraftProfile | null>(null);
 
   useEffect(() => {
@@ -95,6 +100,9 @@ export default function ProfileConfirm() {
     };
   }, []);
 
+  // ✅ draftの正式カラムを優先し、旧実装にも対応
+  const photoUrl = draft?.draft_photo_url || draft?.photo_url || '';
+
   async function onOk() {
     if (posting) return;
     setPosting(true);
@@ -102,7 +110,6 @@ export default function ProfileConfirm() {
     try {
       await confirmProfile();
 
-      // 念のため hasProfile を取り直してから遷移/close
       await getMe().catch(() => null);
 
       if (doneMode === 'close') {
@@ -159,8 +166,8 @@ export default function ProfileConfirm() {
         <div className="text-sm font-semibold text-gray-900">写真</div>
         <div className="flex items-center gap-4">
           <div className="w-24 h-24 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
-            {draft?.photo_url ? (
-              <img src={draft.photo_url} alt="profile" className="w-full h-full object-cover" />
+            {photoUrl ? (
+              <img src={photoUrl} alt="profile" className="w-full h-full object-cover" />
             ) : (
               <div className="text-xs text-gray-400">NO PHOTO</div>
             )}
