@@ -286,17 +286,27 @@ export async function serverLoginWithIdToken(idToken: string): Promise<string> {
 }
 
 // groups
-export async function getGroupByToken(token: string) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL as string;
+export type GroupPageResponse = {
+  ok: true;
+  group: {
+    id: number;
+    token: string;
+    status: string;
+    slot_dt: string;     // ISO
+    slot_jst?: string;   // backendが返すなら
+    location: string;
+    type_mode: string;
+    expires_at?: string; // backendが返すなら
+  };
+  members: Array<{
+    user_id: number;
+    gender: "male" | "female" | string;
+    nickname: string | null;
+    age: number | null;
+    occupation: string | null;
+    photo_url: string | null; // masked優先済みを受け取る想定
+  }>;
+};
 
-  const res = await fetch(`${baseUrl}/groups/${token}`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`/groups/${token} GET failed: ${res.status}\n${t}`);
-  }
-  return res.json();
-}
+export const getGroupByToken = (token: string) =>
+  apiGetJson<GroupPageResponse>(`/groups/${encodeURIComponent(token)}`);

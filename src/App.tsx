@@ -31,12 +31,19 @@ function BootRouter() {
   const location = useLocation();
   const routedOnce = useRef(false);
 
+  // ★ /g/:token は「完全共有型」なのでブートゲートをスキップ
+  const isPublicGroupPage = location.pathname.startsWith('/g/');
+
   useEffect(() => {
     initLiff().catch((e) => {
       console.error('[boot] initLiff error', e);
+
+      // ★ グループページは LIFF 失敗しても表示継続（完全共有型）
+      if (isPublicGroupPage) return;
+
       navigate('/', { replace: true });
     });
-  }, [navigate]);
+  }, [navigate, isPublicGroupPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +53,9 @@ function BootRouter() {
 
       if (cancelled || routedOnce.current) return;
       routedOnce.current = true;
+
+      // ★ /g/:token はログイン不要なので、ここで何もしない（遷移もしない）
+      if (isPublicGroupPage) return;
 
       // ★オンボーディング/規約/プロフィールフローは「画面側」で遷移制御する
       const p = location.pathname;
@@ -97,7 +107,7 @@ function BootRouter() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, location.pathname, location.search]);
+  }, [navigate, location.pathname, location.search, isPublicGroupPage]);
 
   return null;
 }
@@ -130,7 +140,10 @@ export default function App() {
         <Route path="/friends" element={<Setup defaultMode="friends" />} />
         <Route path="/setup" element={<Setup />} />
 
-        {/* グループページ */}
+        {/* グループページ（仕様：/g/:token） */}
+        <Route path="/g/:token" element={<GroupPage />} />
+
+        {/* 旧URL互換（必要なら残す） */}
         <Route path="/group/:token" element={<GroupPage />} />
 
         <Route path="*" element={<Home />} />
