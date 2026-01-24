@@ -297,6 +297,13 @@ export type GroupPageResponse = {
     location: string;
     type_mode: string;
     expires_at?: string; // backendが返すなら
+
+    // ★追加：運営メッセージ
+    venue_name?: string | null;
+    venue_address?: string | null;
+    venue_map_url?: string | null;
+    fee_text?: string | null;
+    notes?: string | null;
   };
   members: Array<{
     user_id: number;
@@ -304,7 +311,7 @@ export type GroupPageResponse = {
     nickname: string | null;
     age: number | null;
     occupation: string | null;
-    photo_url: string | null; // masked優先済みを受け取る想定
+    photo_url: string | null;
   }>;
 };
 
