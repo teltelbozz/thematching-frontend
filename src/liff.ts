@@ -91,6 +91,7 @@ export async function initLiff() {
     _resolve();
   } catch (e) {
     console.error('[liff] init error:', e);
+    clear();  
     _resolve();
   }
 }

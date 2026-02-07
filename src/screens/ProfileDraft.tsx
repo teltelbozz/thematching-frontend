@@ -25,6 +25,46 @@ type DraftGetResponse = {
   draft: DraftProfile | null;
 };
 
+const EDUCATION_OPTIONS = [
+  '中学卒',
+  '高校卒',
+  '専門学校卒',
+  '短大卒',
+  '大学卒',
+  '大学院卒',
+  'その他',
+];
+
+const HOMETOWN_OPTIONS = [
+  '北海道',
+  '東北',
+  '関東',
+  '中部',
+  '近畿',
+  '中国',
+  '四国',
+  '九州・沖縄',
+  '海外',
+];
+
+const PERSONALITY_OPTIONS = [
+  '明るい盛り上げタイプ',
+  '落ち着いた聞き役タイプ',
+  'ムードメーカー',
+  '誠実でまじめ',
+  '行動力がある',
+  '気配り上手',
+];
+
+const ATMOSPHERE_OPTIONS = [
+  'クールなエリート系',
+  '親しみやすい癒し系',
+  'おしゃれでスマート',
+  'ナチュラルでやさしい',
+  '大人っぽい落ち着き系',
+  'アクティブで爽やか',
+];
+
 async function getDraft(): Promise<DraftGetResponse> {
   const r = await apiFetch('/profile/draft', { method: 'GET' });
   if (!r.ok) {
@@ -62,6 +102,7 @@ export default function ProfileDraft() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState<DraftProfile>({
     nickname: '',
@@ -116,6 +157,18 @@ export default function ProfileDraft() {
 
   function set<K extends keyof DraftProfile>(key: K, value: DraftProfile[K]) {
     setForm((p) => ({ ...p, [key]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[key as string]) return prev;
+      const next = { ...prev };
+      delete next[key as string];
+      return next;
+    });
+  }
+
+  function parseDigitsAsNumber(v: string): number | undefined {
+    const digits = v.replace(/\D/g, '');
+    if (!digits) return undefined;
+    return Number(digits);
   }
 
   async function onNext() {
@@ -124,8 +177,26 @@ export default function ProfileDraft() {
     setErr('');
 
     try {
+      const nextErrors: Record<string, string> = {};
+      const nickname = (form.nickname ?? '').trim();
+      const age = form.age;
+      const gender = (form.gender ?? '').trim();
+
+      if (!nickname) nextErrors.nickname = 'ニックネームは必須です。';
+      if (age == null || !Number.isInteger(age) || age < 18 || age > 120) {
+        nextErrors.age = '年齢は18〜120の整数で入力してください。';
+      }
+      if (!gender) nextErrors.gender = '性別は必須です。';
+
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        setErr('入力内容を確認してください。');
+        return;
+      }
+
       const payload: Partial<DraftProfile> = {
         ...form,
+        nickname,
         age:
           form.age === undefined || form.age === null || (form.age as any) === ''
             ? undefined
@@ -174,29 +245,31 @@ export default function ProfileDraft() {
 
       {/* 基本情報 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
-        <Field label="ニックネーム">
+        <Field label="ニックネーム（必須）">
           <input
             className="w-full h-11 border border-gray-300 rounded-lg px-3"
             value={form.nickname ?? ''}
             onChange={(e) => set('nickname', e.target.value)}
             placeholder="例）テスト太郎"
           />
+          {fieldErrors.nickname && <div className="text-xs text-red-600 mt-1">{fieldErrors.nickname}</div>}
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="年齢">
+          <Field label="年齢（必須）">
             <input
               className="w-full h-11 border border-gray-300 rounded-lg px-3"
-              type="number"
-              min={18}
-              max={120}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.age ?? ''}
-              onChange={(e) => set('age', e.target.value === '' ? undefined : Number(e.target.value))}
+              onChange={(e) => set('age', parseDigitsAsNumber(e.target.value))}
               placeholder="例）28"
             />
+            {fieldErrors.age && <div className="text-xs text-red-600 mt-1">{fieldErrors.age}</div>}
           </Field>
 
-          <Field label="性別">
+          <Field label="性別（必須）">
             <select
               className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
               value={form.gender ?? ''}
@@ -207,6 +280,7 @@ export default function ProfileDraft() {
               <option value="female">女性</option>
               <option value="other">その他</option>
             </select>
+            {fieldErrors.gender && <div className="text-xs text-red-600 mt-1">{fieldErrors.gender}</div>}
           </Field>
         </div>
       </section>
@@ -214,12 +288,18 @@ export default function ProfileDraft() {
       {/* 学歴・居住 */}
       <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-5 space-y-5 mt-5">
         <Field label="学歴">
-          <input
-            className="w-full h-11 border border-gray-300 rounded-lg px-3"
+          <select
+            className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
             value={form.education ?? ''}
             onChange={(e) => set('education', e.target.value)}
-            placeholder="例）大学卒"
-          />
+          >
+            <option value="">選択してください</option>
+            {EDUCATION_OPTIONS.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field label="大学">
@@ -233,12 +313,18 @@ export default function ProfileDraft() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="出身地">
-            <input
-              className="w-full h-11 border border-gray-300 rounded-lg px-3"
+            <select
+              className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
               value={form.hometown ?? ''}
               onChange={(e) => set('hometown', e.target.value)}
-              placeholder="例）福岡県"
-            />
+            >
+              <option value="">選択してください</option>
+              {HOMETOWN_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <Field label="住まい">
@@ -263,46 +349,47 @@ export default function ProfileDraft() {
           />
         </Field>
 
-        <Field label="性格（選択／自由入力可）">
-          <input
-            className="w-full h-11 border border-gray-300 rounded-lg px-3"
-            list="personality-list"
+        <Field label="性格（選択制）">
+          <select
+            className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
             value={form.personality ?? ''}
             onChange={(e) => set('personality', e.target.value)}
-            placeholder="例）明るい盛り上げタイプ"
-          />
-          <datalist id="personality-list">
-            <option value="明るい盛り上げタイプ" />
-            <option value="落ち着いた聞き役タイプ" />
-            <option value="ムードメーカー" />
-          </datalist>
+          >
+            <option value="">選択してください</option>
+            {PERSONALITY_OPTIONS.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="年収（万円）">
             <input
               className="w-full h-11 border border-gray-300 rounded-lg px-3"
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.income ?? ''}
-              onChange={(e) => set('income', e.target.value === '' ? undefined : Number(e.target.value))}
+              onChange={(e) => set('income', parseDigitsAsNumber(e.target.value))}
               placeholder="例）650"
             />
           </Field>
 
-          <Field label="雰囲気（選択／自由入力可）">
-            <input
-              className="w-full h-11 border border-gray-300 rounded-lg px-3"
-              list="atmosphere-list"
+          <Field label="雰囲気（選択制）">
+            <select
+              className="w-full h-11 border border-gray-300 rounded-lg px-3 bg-white"
               value={form.atmosphere ?? ''}
               onChange={(e) => set('atmosphere', e.target.value)}
-              placeholder="例）クールなエリート系"
-            />
-            <datalist id="atmosphere-list">
-              <option value="クールなエリート系" />
-              <option value="親しみやすい癒し系" />
-              <option value="おしゃれでスマート" />
-            </datalist>
+            >
+              <option value="">選択してください</option>
+              {ATMOSPHERE_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
       </section>
