@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMe, getTermsStatus } from '../api';
-import { closeLiffWindowSafe } from '../liff';
 
 type LoadState = 'loading' | 'error';
 
@@ -10,6 +9,7 @@ export default function Onboarding() {
   const nav = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
   const [err, setErr] = useState('');
+  const MATCH_PREFS_PATH = '/mypage/preferences';
 
   useEffect(() => {
     let cancelled = false;
@@ -24,8 +24,8 @@ export default function Onboarding() {
         if (cancelled) return;
 
         if (!ts?.accepted) {
-          // 同意後に /profile?done=close に行って保存したら閉じる
-          nav(`/terms?r=${encodeURIComponent('/profile?done=close')}`, { replace: true });
+          // 同意後はプロフィールへ進み、完了後に希望条件画面へ進む
+          nav(`/terms?r=${encodeURIComponent(`/profile?r=${MATCH_PREFS_PATH}`)}`, { replace: true });
           return;
         }
 
@@ -34,14 +34,13 @@ export default function Onboarding() {
         if (cancelled) return;
 
         if (!me?.hasProfile) {
-          // 未登録 → プロフィール入力へ（保存後 close）
-          nav('/profile?done=close', { replace: true });
+          // 未登録 → プロフィール入力へ（完了後は希望条件画面）
+          nav(`/profile?r=${encodeURIComponent(MATCH_PREFS_PATH)}`, { replace: true });
           return;
         }
 
-        // 3) 登録済み → 即 close（公式アカウントのトークへ戻る）
-        const closed = closeLiffWindowSafe();
-        if (!closed) nav('/', { replace: true });
+        // 3) 登録済み → 希望条件画面へ
+        nav(MATCH_PREFS_PATH, { replace: true });
       } catch (e: any) {
         if (cancelled) return;
         setErr(e?.message || String(e));
