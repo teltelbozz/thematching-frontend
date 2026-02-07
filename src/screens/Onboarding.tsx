@@ -9,7 +9,7 @@ export default function Onboarding() {
   const nav = useNavigate();
   const [state, setState] = useState<LoadState>('loading');
   const [err, setErr] = useState('');
-  const MATCH_PREFS_PATH = '/mypage/preferences';
+  const SETUP_PATH = '/setup';
 
   useEffect(() => {
     let cancelled = false;
@@ -24,8 +24,8 @@ export default function Onboarding() {
         if (cancelled) return;
 
         if (!ts?.accepted) {
-          // 同意後はプロフィールへ進み、完了後に希望条件画面へ進む
-          nav(`/terms?r=${encodeURIComponent(`/profile?r=${MATCH_PREFS_PATH}`)}`, { replace: true });
+          // 同意後はプロフィールへ進み、完了後にSetup画面へ進む
+          nav(`/terms?r=${encodeURIComponent(`/profile?r=${SETUP_PATH}`)}`, { replace: true });
           return;
         }
 
@@ -34,13 +34,13 @@ export default function Onboarding() {
         if (cancelled) return;
 
         if (!me?.hasProfile) {
-          // 未登録 → プロフィール入力へ（完了後は希望条件画面）
-          nav(`/profile?r=${encodeURIComponent(MATCH_PREFS_PATH)}`, { replace: true });
+          // 未登録 → プロフィール入力へ（完了後はSetup画面）
+          nav(`/profile?r=${encodeURIComponent(SETUP_PATH)}`, { replace: true });
           return;
         }
 
-        // 3) 登録済み → 希望条件画面へ
-        nav(MATCH_PREFS_PATH, { replace: true });
+        // 3) 登録済み → Setup画面へ
+        nav(SETUP_PATH, { replace: true });
       } catch (e: any) {
         if (cancelled) return;
         setErr(e?.message || String(e));
