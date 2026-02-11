@@ -164,7 +164,7 @@ export default function Terms() {
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
               />
-              <span style={{ color: '#111' }}>上記の利用規約に同意します</span>
+              <span style={{ color: '#f9f9f9' }}>上記の利用規約に同意します</span>
             </label>
 
             <button
